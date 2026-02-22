@@ -1,6 +1,6 @@
 import Conversation from '../models/conversation.model.js';
 import Message from '../models/message.model.js';
-import { emitToUser } from '../socket/index.js';
+import { emitToUser } from '../sockets/index.js';
 
 // @desc    Create or get private conversation
 // @route   POST /api/conversations

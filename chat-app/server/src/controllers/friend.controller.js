@@ -1,5 +1,5 @@
 import User from '../models/user.model.js';
-import { emitToUser } from '../socket/index.js';
+import { emitToUser } from '../sockets/index.js';
 
 // @desc    Send friend request
 // @route   POST /api/friends/request/:userId
