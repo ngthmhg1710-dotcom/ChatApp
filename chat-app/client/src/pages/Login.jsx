@@ -15,9 +15,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const success = await login(formData);
-    if (success) {
-      navigate('/chat');
-    }
+    if (success) navigate('/chat');
   };
 
   const handleChange = (e) => {
@@ -25,52 +23,42 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-        <div className="flex items-center justify-center mb-8">
-          <MessageSquare className="w-12 h-12 text-blue-600" />
-          <h1 className="text-3xl font-bold text-gray-800 ml-3">Chat App</h1>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 flex items-center justify-center p-6">
+      <div className="bg-white/90 backdrop-blur rounded-3xl shadow-2xl w-full max-w-md p-10">
+        
+        <div className="flex flex-col items-center mb-8">
+          <div className="bg-indigo-100 p-4 rounded-2xl mb-4">
+            <MessageSquare className="w-10 h-10 text-indigo-600" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-800">Chat App</h1>
+          <p className="text-gray-500 mt-1">Welcome back 👋</p>
         </div>
 
-        <h2 className="text-2xl font-semibold text-gray-700 mb-6 text-center">
-          Welcome Back
-        </h2>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            placeholder="Email address"
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              placeholder="your@email.com"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              placeholder="Enter your password"
-            />
-          </div>
+          <input
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            placeholder="Password"
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:scale-[1.02] transition transform disabled:opacity-50"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
@@ -78,7 +66,7 @@ export default function Login() {
 
         <p className="mt-6 text-center text-gray-600">
           Don't have an account?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline font-semibold">
+          <Link to="/register" className="text-indigo-600 font-semibold hover:underline">
             Register
           </Link>
         </p>
