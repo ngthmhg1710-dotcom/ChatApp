@@ -5,7 +5,6 @@ const userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: [true, 'Username is required'],
-    unique: true,
     trim: true,
     minlength: 3,
     maxlength: 30
@@ -28,7 +27,6 @@ const userSchema = new mongoose.Schema({
   },
 
   // ===== EMAIL VERIFICATION =====
-
   isVerified: {
     type: Boolean,
     default: false
@@ -42,8 +40,16 @@ const userSchema = new mongoose.Schema({
     type: Date
   },
 
-  // ===== USER INFO =====
+  // ===== RESET PASSWORD =====
+  resetPasswordToken: {
+    type: String
+  },
 
+  resetPasswordExpire: {
+    type: Date
+  },
+
+  // ===== USER INFO =====
   avatar: {
     type: String,
     default: 'https://ui-avatars.com/api/?name=User&background=random'
@@ -90,29 +96,38 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Hash password before saving
+
+// ===== HASH PASSWORD BEFORE SAVE =====
 userSchema.pre('save', async function(next) {
+
   if (!this.isModified('password')) {
     return next();
   }
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+
   next();
 });
 
-// Compare password method
+
+// ===== COMPARE PASSWORD =====
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Remove sensitive data from JSON response
+
+// ===== REMOVE SENSITIVE DATA =====
 userSchema.methods.toJSON = function() {
+
   const obj = this.toObject();
+
   delete obj.password;
   delete obj.__v;
+
   return obj;
 };
+
 
 const User = mongoose.model('User', userSchema);
 
