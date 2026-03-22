@@ -10,9 +10,7 @@ import Profile from "./pages/Profile";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import { useAuthStore } from "./store/authStore";
-import VerifyEmail from "./pages/VerifyEmail";
 
-<Route path="/verify/:token" element={<VerifyEmail />} />
 function App() {
   const { user } = useAuthStore();
 
@@ -59,19 +57,6 @@ function App() {
             </PrivateRoute>
           }
         />
-              <Route
-        path="/forgot-password"
-        element={
-          <PublicRoute>
-            <ForgotPassword />
-          </PublicRoute>
-        }
-      />
-
-      <Route
-  path="/reset-password/:token"
-  element={<ResetPassword />}
-/>
 
         <Route
           path="/friends"
@@ -99,7 +84,8 @@ function App() {
             </PrivateRoute>
           }
         />
-
+<Route path="/forgot-password" element={<ForgotPassword />} />
+<Route path="/reset-password/:token" element={<ResetPassword />} />
         {/* Default redirect */}
         <Route
           path="/"

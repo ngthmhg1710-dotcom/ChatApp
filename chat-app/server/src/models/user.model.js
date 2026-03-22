@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto'; // ✅ đúng chỗ
 
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: [true, 'Username is required'],
+    unique: true,
     trim: true,
     minlength: 3,
     maxlength: 30
@@ -27,6 +29,7 @@ const userSchema = new mongoose.Schema({
   },
 
   // ===== EMAIL VERIFICATION =====
+
   isVerified: {
     type: Boolean,
     default: false
@@ -39,7 +42,6 @@ const userSchema = new mongoose.Schema({
   verificationExpire: {
     type: Date
   },
-
   // ===== RESET PASSWORD =====
   resetPasswordToken: {
     type: String
@@ -48,8 +50,8 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpire: {
     type: Date
   },
-
   // ===== USER INFO =====
+
   avatar: {
     type: String,
     default: 'https://ui-avatars.com/api/?name=User&background=random'
@@ -96,39 +98,33 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-
-// ===== HASH PASSWORD BEFORE SAVE =====
+// Hash password
 userSchema.pre('save', async function(next) {
-
-  if (!this.isModified('password')) {
-    return next();
-  }
+  if (!this.isModified('password')) return next();
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
-
   next();
 });
 
-
-// ===== COMPARE PASSWORD =====
+// Compare password
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+// Reset password token
+userSchema.methods.getResetPasswordToken = function () {
+  const resetToken = crypto.randomBytes(20).toString("hex");
 
-// ===== REMOVE SENSITIVE DATA =====
-userSchema.methods.toJSON = function() {
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
 
-  const obj = this.toObject();
+  this.resetPasswordExpire = Date.now() + 30 * 60 * 1000;
 
-  delete obj.password;
-  delete obj.__v;
-
-  return obj;
+  return resetToken;
 };
 
-
 const User = mongoose.model('User', userSchema);
-
 export default User;
