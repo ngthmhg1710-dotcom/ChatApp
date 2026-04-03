@@ -24,7 +24,13 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const success = await login(formData);
+    const email = formData.email.trim();
+    const password = formData.password;
+
+    if (!email) return toast.error('Vui lòng nhập email');
+    if (password.length < 6) return toast.error('Mật khẩu phải có ít nhất 6 ký tự');
+
+    const success = await login({ email, password });
     if (success) navigate("/chat");
   };
 
@@ -150,7 +156,7 @@ export default function Login() {
           {/* Nút đăng nhập */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !formData.email.trim() || formData.password.length < 6}
             className="w-full py-3 rounded-xl font-semibold
               bg-gradient-to-r from-blue-500 to-indigo-600
               text-white
