@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Custom scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb { background: #4b5563; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+/* ── Autofill fix ─────────────────────────────────────────────────────────── */
+/* Cập nhật: Để màu đen cho trang Login (nền trắng) và giữ trắng cho Glassmorphism cũ nếu cần */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px white inset !important; /* Đổi nền autofill thành trắng */
+  box-shadow: 0 0 0px 1000px white inset !important;
+  -webkit-text-fill-color: #000000 !important; /* ÉP CHỮ MÀU ĐEN */
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* ── Dark mode — áp dụng cho toàn bộ app ─────────────────────────────────── */
+.dark body {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+/* Ép màu chữ trong input luôn đen khi ở trang có nền trắng (như Login bên phải) */
+/* Chỉ áp dụng cho các input có class cụ thể hoặc khi không ở chế độ dark mode sâu */
+input.chat-input-login {
+  color: #000000 !important;
+}
+
+/* Các cấu hình Dark Mode hiện tại của bạn giữ nguyên */
+.dark .bg-gray-100 { background-color: #1f2937 !important; }
+.dark .bg-white     { background-color: #1f2937 !important; }
+.dark .bg-gray-50   { background-color: #111827 !important; }
+
+.dark .text-gray-800 { color: #f9fafb !important; }
+.dark .text-gray-700 { color: #e5e7eb !important; }
+.dark .text-gray-600 { color: #d1d5db !important; }
+.dark .text-gray-500 { color: #9ca3af !important; }
+.dark .text-gray-400 { color: #6b7280 !important; }
+
+.dark .border-gray-200 { border-color: #374151 !important; }
+.dark .border-gray-100 { border-color: #1f2937 !important; }
+
+/* Input fields trong Dark Mode (Sidebar/Settings) */
+.dark input:not([type="checkbox"]):not([type="range"]),
+.dark textarea {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #f9fafb !important;
+}
+
+/* ── Typography & Smooth transition ──────────────────────────────────────── */
+:root {
+  --chat-font-size: 15px;
+}
+
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.chat-text { font-size: var(--chat-font-size, 15px); }
+.chat-time { font-size: calc(var(--chat-font-size, 15px) - 2px); opacity: 0.7; }
+.chat-username { font-size: calc(var(--chat-font-size, 15px) - 1px); font-weight: 600; }
+.chat-preview { font-size: calc(var(--chat-font-size, 15px) - 1px); }
+.chat-caption { font-size: calc(var(--chat-font-size, 15px) - 2px); }
+.chat-meta { font-size: max(10px, calc(var(--chat-font-size, 15px) - 4px)); }
+.chat-input { font-size: var(--chat-font-size, 15px); }

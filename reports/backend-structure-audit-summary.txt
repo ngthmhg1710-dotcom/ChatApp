@@ -1,0 +1,25 @@
+Reviewed existing backend entrypoints:
+- server/src/app.js
+- server/src/server.js
+
+Confirmed imports observed in reviewed code:
+- connectDB from ./config/database.js
+- initSocket from ./sockets/index.js
+
+Confirmed mounted endpoints:
+- /api/auth
+- /api/users
+- /api/messages
+- /api/conversations
+- /api/friends
+- /api/reports
+- /uploads
+- /health
+
+Main cleanup themes:
+- make startup await infrastructure readiness
+- align HTTP and socket auth/CORS
+- standardize async error handling and error payloads
+- document backend layering and route ownership
+- improve readiness/shutdown handling
+- revisit upload/public file serving and security posture

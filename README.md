@@ -1,55 +1,250 @@
-# NỀN TẢNG GIAO TIẾP TRỰC TUYẾN REAL-TIME
+# Real-time Chat Application
 
-## MỤC LỤC
+Nền tảng giao tiếp trực tuyến với tính năng chat, gọi điện video/audio và khả năng mở rộng cao.
 
-### I. Tổng quan đề tài
-1. Lý do chọn đề tài  
-2. Mục tiêu của đề tài  
-3. Phạm vi và đối tượng nghiên cứu  
-4. Ý nghĩa thực tiễn của đề tài  
+## 🚀 Công nghệ sử dụng
 
-### II. Cơ sở lý thuyết và Công nghệ sử dụng
-2.1. Tổng quan hệ thống giao tiếp thời gian thực  
-2.2. WebSocket và cơ chế Real-time Communication  
-2.3. WebRTC và truyền thông Audio/Video Peer-to-Peer  
-2.4. Kiến trúc Client – Server  
-2.5. Các công nghệ sử dụng  
+### Backend
+- **NodeJS & Express**: REST API server
+- **Socket.io**: Real-time bidirectional communication
+- **MongoDB**: NoSQL database cho tin nhắn
+- **Redis**: Caching và Pub/Sub (Level 4)
+- **JWT**: Authentication
+- **Multer**: File upload handling
 
-### III. Phân tích yêu cầu hệ thống
-3.1. Yêu cầu chức năng  
-3.2. Yêu cầu phi chức năng  
-3.3. Phân cấp tính năng theo Level  
+### Frontend
+- **React 18**: UI framework
+- **Vite**: Build tool
+- **TailwindCSS**: Styling
+- **Socket.io Client**: WebSocket client
+- **Zustand**: State management
+- **React Router**: Navigation
+- **Axios**: HTTP client
 
-### IV. Thiết kế hệ thống
-4.1. Kiến trúc tổng thể  
-4.2. Thiết kế Backend  
-4.3. Thiết kế Frontend  
-4.4. Thiết kế cơ sở dữ liệu  
-4.5. Sơ đồ luồng xử lý  
+### Infrastructure
+- **Docker & Docker Compose**: Containerization
+- **Nginx**: Load balancer & reverse proxy
+- **WebRTC**: Peer-to-peer video/audio calls
 
-### V. Xây dựng và triển khai hệ thống
-5.1. Cài đặt môi trường phát triển  
-5.2. Triển khai Backend  
-5.3. Triển khai Frontend  
-5.4. Cấu hình Docker và Docker Compose  
-5.5. Reverse Proxy và Load Balancing với Nginx  
+## 📁 Cấu trúc dự án
 
-### VI. Các chức năng đã thực hiện
-6.1. Level 1 – Chat cơ bản  
-6.2. Level 2 – Group Chat và Multimedia  
-6.3. Level 3 – Audio/Video Call với WebRTC  
-6.4. Level 4 – Tối ưu hiệu năng và Scalability  
+```
+chat-app/
+├── server/              # Backend API
+│   ├── src/
+│   │   ├── config/      # Database, Redis config
+│   │   ├── models/      # Mongoose models
+│   │   ├── routes/      # API routes
+│   │   ├── controllers/ # Route handlers
+│   │   ├── middlewares/ # Auth, error handling
+│   │   ├── socket/      # Socket.io handlers
+│   │   ├── app.js       # Express app
+│   │   └── server.js    # Entry point
+│   ├── Dockerfile
+│   └── package.json
+│
+├── client/              # Frontend React app
+│   ├── src/
+│   │   ├── components/  # Reusable components
+│   │   ├── pages/       # Page components
+│   │   ├── hooks/       # Custom hooks
+│   │   ├── store/       # Zustand stores
+│   │   ├── utils/       # Helper functions
+│   │   └── main.jsx     # Entry point
+│   ├── Dockerfile
+│   └── package.json
+│
+├── nginx/
+│   └── nginx.conf       # Load balancer config
+│
+└── docker-compose.yml   # Orchestration
+```
 
-### VII. Đánh giá hiệu năng và khả năng mở rộng
-7.1. Scaling WebSocket với Redis  
-7.2. Caching dữ liệu  
-7.3. Message Queue (Optional)  
+## 🏗️ Cài đặt và Chạy
 
-### VIII. Kết quả đạt được và hướng phát triển
-8.1. Kết quả đạt được  
-8.2. Hạn chế  
-8.3. Hướng phát triển trong tương lai  
+### Yêu cầu
+- Docker & Docker Compose
+- Node.js 20+ (nếu chạy local)
 
-### IX. Kết luận
+### Chạy với Docker (Recommended)
 
-### X. Tài liệu tham khảo
+```bash
+# Clone repository
+git clone <your-repo-url>
+cd chat-app
+
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+```
+
+Services sẽ chạy tại:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
+- Nginx: http://localhost:80
+- MongoDB: localhost:27017
+- Redis: localhost:6379
+
+### Chạy Local (Development)
+
+#### Backend
+```bash
+cd server
+npm install
+cp .env.example .env
+# Edit .env with your config
+npm run dev
+```
+
+#### Frontend
+```bash
+cd client
+npm install
+npm run dev
+```
+
+## 🎯 Tính năng theo Level
+
+### ✅ Level 1: MVP
+- [x] Authentication (Register/Login với JWT)
+- [x] Tìm kiếm người dùng
+- [x] Gửi/Chấp nhận lời mời kết bạn
+- [x] Chat 1-1 real-time
+- [x] Lưu lịch sử tin nhắn
+- [x] Hiển thị trạng thái tin nhắn
+
+### 🔄 Level 2: Group & Multimedia
+- [ ] Tạo nhóm chat
+- [ ] Thêm/Xóa thành viên nhóm
+- [ ] Gửi hình ảnh/file
+- [ ] Preview file trước khi gửi
+- [ ] Hiển thị Online/Offline
+- [ ] "User is typing..." indicator
+
+### 🎥 Level 3: WebRTC Calls
+- [ ] Signaling server
+- [ ] 1-on-1 Video call
+- [ ] Audio call
+- [ ] Bật/Tắt Mic/Camera
+- [ ] Call notifications
+
+### ⚡ Level 4: Scalability
+- [x] Redis Adapter cho Socket.io
+- [x] Nginx Load Balancer
+- [x] Redis Caching
+- [ ] Message Queue (Optional)
+- [ ] Performance testing
+
+## 🔧 Configuration
+
+### Environment Variables (Backend)
+
+```env
+NODE_ENV=production
+PORT=5000
+MONGODB_URI=mongodb://admin:password123@mongodb:27017/chatapp?authSource=admin
+REDIS_URL=redis://redis:6379
+JWT_SECRET=your-secret-key
+JWT_EXPIRE=7d
+```
+
+### Scaling Backend (Level 4)
+
+Uncomment trong `docker-compose.yml`:
+
+```yaml
+backend:
+  deploy:
+    replicas: 3  # Chạy 3 instance
+```
+
+## 📊 Database Schema
+
+### User
+```javascript
+{
+  username: String,
+  email: String,
+  password: String (hashed),
+  avatar: String,
+  friends: [ObjectId],
+  friendRequests: [{from: ObjectId, createdAt: Date}],
+  isOnline: Boolean,
+  lastSeen: Date
+}
+```
+
+### Conversation
+```javascript
+{
+  type: 'private' | 'group',
+  name: String (for groups),
+  participants: [ObjectId],
+  admin: ObjectId (for groups),
+  lastMessage: ObjectId,
+  isActive: Boolean
+}
+```
+
+### Message
+```javascript
+{
+  conversation: ObjectId,
+  sender: ObjectId,
+  type: 'text' | 'image' | 'file' | 'system',
+  content: String,
+  fileUrl: String,
+  readBy: [ObjectId],
+  replyTo: ObjectId
+}
+```
+
+## 🧪 Testing
+
+```bash
+# Backend tests
+cd server
+npm test
+
+# Load testing
+npm run test:load
+```
+
+## 📝 API Documentation
+
+### Authentication
+- POST `/api/auth/register` - Đăng ký
+- POST `/api/auth/login` - Đăng nhập
+- GET `/api/auth/me` - Lấy thông tin user
+
+### Friends
+- POST `/api/friends/request/:userId` - Gửi lời mời kết bạn
+- POST `/api/friends/accept/:requestId` - Chấp nhận
+- GET `/api/friends` - Danh sách bạn bè
+
+### Conversations
+- POST `/api/conversations` - Tạo chat 1-1
+- POST `/api/conversations/group` - Tạo nhóm
+- GET `/api/conversations` - Lấy danh sách
+
+### Messages
+- GET `/api/messages/:conversationId` - Lấy tin nhắn
+- POST `/api/messages/upload` - Upload file
+
+## 🎨 Screenshots
+
+(Thêm screenshots của ứng dụng)
+
+## 👥 Contributors
+
+- Your Name
+- Team Members
+
+## 📄 License
+
+MIT License

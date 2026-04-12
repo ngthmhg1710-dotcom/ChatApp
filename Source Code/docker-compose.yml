@@ -1,0 +1,82 @@
+services:
+  mongodb:
+      image: mongo:7.0
+      container_name: chat-mongodb
+      restart: always
+      ports:
+        - "27017:27017"
+      environment:
+        MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+        MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+        MONGO_INITDB_DATABASE: chatapp
+      volumes:
+        - mongodb_data:/data/db
+      networks:
+        - chat-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: chat-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - chat-network
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: chat-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/.env          # ← đọc từ file .env, không hardcode
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - chat-network
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: chat-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - chat-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: chat-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - chat-network
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  uploads_data:
