@@ -110,30 +110,41 @@ function Tile({ member, isSelf, stream, micOn, camOn, speaking, leaving, screenS
 
   // [BUG2 FIX] Gán srcObject khi stream HOẶC camOn thay đổi
   useEffect(() => {
-    if (!videoRef.current || !stream) return;
-    
-    // Kiểm tra xem stream có track không, độc lập với camOn state
-    // (vì camOn state có thể delay update)
-    const hasVideoTrack = stream.getVideoTracks().some(isLive);
-    const showVideo = (camOn || screenSharing) && hasVideoTrack;
-    
-    if (showVideo) {
-      // Chỉ gán lại nếu khác để tránh flicker
-      if (videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
-      }
-      videoRef.current.play().catch(() => {});
-    } else if (!isSelf) {
-      // Với remote peer: nếu có video track nhưng camOn=false (state chưa update)
-      // vẫn set stream để audio tracks có thể play
-      if (hasVideoTrack && videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
+    if (!videoRef.current || !stream) {
+      if (videoRef.current) videoRef.current.srcObject = null;
+      return;
+    }
+
+    const attach = () => {
+      const hasVideo = stream.getVideoTracks().some(isLive);
+      if ((camOn || screenSharing) && hasVideo) {
+        if (videoRef.current.srcObject !== stream) {
+          videoRef.current.srcObject = stream;
+        }
+        videoRef.current.play().catch(() => {});
+      } else if (!isSelf) {
+        if (videoRef.current.srcObject !== stream) {
+          videoRef.current.srcObject = stream;
+        }
       } else {
         videoRef.current.srcObject = null;
       }
-    } else {
-      videoRef.current.srcObject = null;
+    };
+
+    attach();
+
+    // Lắng nghe khi stream có track mới (peer bật camera)
+    try {
+      stream.addEventListener('addtrack', attach);
+    } catch (e) {
+      try { stream.onaddtrack = attach; } catch (err) {}
     }
+
+    return () => {
+      try { stream.removeEventListener('addtrack', attach); } catch (e) {
+        try { if (stream.onaddtrack === attach) stream.onaddtrack = null; } catch (err) {}
+      }
+    };
   }, [stream, camOn, screenSharing, isSelf]);
 
   useEffect(() => {
@@ -957,7 +968,15 @@ export default function CallRoom() {
       try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
     };
 
-    const onVideoToggle = ({ from, enabled }) => updatePeerState(from, { camOn: enabled });
+    const onVideoToggle = ({ from, enabled }) => {
+      updatePeerState(from, { camOn: enabled });
+      if (enabled) {
+        // Force shallow update of remoteStreams after a short delay so Tile re-attaches
+        setTimeout(() => {
+          setRemoteStreams(prev => ({ ...prev }));
+        }, 300);
+      }
+    };
     const onAudioToggle = ({ from, enabled }) => updatePeerState(from, enabled ? { micOn: true } : { micOn: false, speaking: false });
     const onDeafToggle  = ({ from, deafened: d }) => updatePeerState(from, { deafened: d });
     const onSSStart = ({ from }) => updatePeerState(from, { screenSharing: true });
@@ -1248,6 +1267,10 @@ export default function CallRoom() {
               const ps = isSelf
                 ? { micOn, camOn, speaking: peerStates[myUserId]?.speaking, screenSharing: false }
                 : (peerStates[pid] || {});
+              // Với remote peer: ưu tiên check stream thực tế thay vì chỉ tin vào state
+              const actualCamOn = isSelf
+                ? camOn
+                : (ps.camOn || (remoteStreams[pid]?.getVideoTracks().some(isLive) ?? false));
               const leaving = leavingPeers.has(pid);
               const isRecon = ps.reconnecting;
               const isOdd = sortedTiles.length % 2 !== 0;
@@ -1263,7 +1286,7 @@ export default function CallRoom() {
                       isSelf={isSelf}
                       stream={stream}
                       micOn={ps.micOn !== false}
-                      camOn={Boolean(ps.camOn)}
+                      camOn={actualCamOn}
                       speaking={Boolean(ps.speaking)}
                       leaving={leaving}
                       screenSharing={false}
