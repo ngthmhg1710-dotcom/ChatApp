@@ -92,6 +92,37 @@ function LinkifiedText({ text, className = '', mine = false }) {
   );
 }
 
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+function MessageContent({ content, isOwn }) {
+  return (
+    <div className={`prose prose-sm max-w-none
+      ${isOwn ? 'prose-invert text-white' : 'prose-neutral dark:prose-invert'}
+      prose-p:my-0.5 prose-p:leading-relaxed
+      prose-code:bg-black/20 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+      prose-pre:bg-black/30 prose-pre:rounded-lg prose-pre:p-3
+      prose-ul:my-1 prose-ol:my-1 prose-li:my-0
+      prose-strong:font-semibold
+      prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+    `}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ node, ...props }) => (
+            <a {...props} target="_blank" rel="noopener noreferrer" />
+          ),
+          img: ({ node, ...props }) => (
+            <img {...props} className="max-w-full rounded-lg max-h-64 object-contain" />
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
 function AppLogo({ size = 20, className = '' }) {
   return (
     <img
@@ -946,7 +977,7 @@ function MessageBubble({
           onError={(e) => { e.target.style.display='none'; }} />
         {msg.content && (
           <div className={`px-3 py-2 rounded-2xl chat-text leading-relaxed break-words ${mine ? 'bg-blue-600 text-white' : 'bg-white text-gray-800 shadow-sm'}`}>
-            <LinkifiedText text={msg.content} mine={mine} />
+            <MessageContent content={msg.content} isOwn={mine} />
           </div>
         )}
       </div>
@@ -970,7 +1001,7 @@ function MessageBubble({
       <div className={`px-4 py-2.5 rounded-2xl chat-text leading-relaxed break-words
         ${mine ? 'bg-blue-600 text-white rounded-br-md' : 'bg-white text-gray-800 shadow-sm rounded-bl-md'}
         ${msg.status === 'sending' ? 'opacity-70' : ''}`}>
-        <LinkifiedText text={msg.content} mine={mine} />
+        <MessageContent content={msg.content} isOwn={mine} />
       </div>
     );
   };
