@@ -76,9 +76,12 @@ function Avatar({ member, size = 80, className = '', ring = false, speaking = fa
     );
   }
   return (
-    <div className={`${color} rounded-full flex items-center justify-center font-bold text-white transition-all duration-300 ${ringClass} ${className}`}
-      style={{ width: size, height: size, fontSize: size * 0.32 }}>
-      {name.slice(0, 2).toUpperCase()}
+    <div className={`${ringClass} ${className}`} style={{ width: size, height: size }}>
+      <div className="w-full h-full rounded-full bg-pink-400 flex items-center justify-center text-white transition-all duration-300">
+        <svg viewBox="0 0 24 24" className="w-10 h-10 text-yellow-300" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zM12 14c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+        </svg>
+      </div>
     </div>
   );
 }
@@ -129,8 +132,10 @@ function IncomingCallOverlay({ callerInfo, callType, onAccept, onReject }) {
             <img src={fileUrl(callerInfo.avatar)} alt={callerName}
               className="w-28 h-28 rounded-full object-cover ring-4 ring-white/30 z-10" />
           ) : (
-            <div className={`w-28 h-28 ${color} rounded-full flex items-center justify-center text-4xl font-bold text-white ring-4 ring-white/30 z-10`}>
-              {callerName.slice(0, 2).toUpperCase()}
+            <div className="w-28 h-28 rounded-full bg-pink-400 flex items-center justify-center ring-4 ring-white/30 z-10">
+              <svg viewBox="0 0 24 24" className="w-12 h-12 text-yellow-300" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zM12 14c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+              </svg>
             </div>
           )}
         </div>
@@ -238,18 +243,13 @@ export default function DirectCallRoom() {
 
   const conversationId = searchParams.get('conv');
   const callType       = searchParams.get('type') || 'audio';
-  const isGroupRoute   = searchParams.get('group') === '1';
+  // Group route param ignored — DirectCallRoom supports 1-1 only
+  const isGroupRoute   = false;
   const returnUrl      = searchParams.get('return') || '/chat';
 
   const myUserId = getPid(currentUser);
 
-  // Redirect nếu là group call
-  useEffect(() => {
-    if (!isGroupRoute || !callId) return;
-    const p = new URLSearchParams(searchParams);
-    p.set('group', '1');
-    navigate(`/call/${callId}?${p.toString()}`, { replace: true });
-  }, [isGroupRoute, navigate, callId, searchParams]);
+  // Group calls removed — no redirect needed
 
   // ── state ─────────────────────────────────────────────────────────────────
   const [status,       setStatus]       = useState('connecting');
@@ -548,7 +548,7 @@ export default function DirectCallRoom() {
 
   // ── INIT on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!socket || !callId || !conversationId || !myUserId || isGroupRoute) return;
+    if (!socket || !callId || !conversationId || !myUserId) return;
 
     const init = async () => {
       try { await getLocalStream(callType === 'video'); } catch {}
@@ -566,17 +566,7 @@ export default function DirectCallRoom() {
         }
       } catch {}
 
-      if (storedPending?.isGroup) {
-        // redirect to group call room
-        const p = new URLSearchParams({
-          conv: String(storedPending.conversationId || conversationId),
-          type: storedPending.callType || callType,
-          group: '1',
-          return: returnUrl,
-        });
-        navigate(`/call/${callId}?${p.toString()}`, { replace: true });
-        return;
-      }
+      // Ignore stored pending group offers — only 1-1 calls supported
 
       if (storedPending) {
         // CALLEE: có offer chờ
@@ -588,6 +578,10 @@ export default function DirectCallRoom() {
             const stream = localStreamRef.current || await getLocalStream((storedPending.callType || callType) === 'video');
             await pc.__audioSender.replaceTrack(stream.getAudioTracks().find(isLive) || null);
             await pc.__videoSender.replaceTrack(stream.getVideoTracks().find(isLive) || null);
+            if (pc.signalingState !== 'stable') {
+              console.warn('Auto-answer: pc not stable, aborting auto-answer for', storedPending.from);
+              throw new Error('pc not stable');
+            }
             await pc.setRemoteDescription(new RTCSessionDescription(storedPending.offer));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -650,6 +644,10 @@ export default function DirectCallRoom() {
       const pc = createPC(offer.from);
       await pc.__audioSender.replaceTrack(stream.getAudioTracks().find(isLive) || null);
       await pc.__videoSender.replaceTrack(stream.getVideoTracks().find(isLive) || null);
+      if (pc.signalingState !== 'stable') {
+        console.warn('handleAcceptPending: pc not stable, skipping setRemoteDescription');
+        return;
+      }
       await pc.setRemoteDescription(new RTCSessionDescription(offer.offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -761,6 +759,10 @@ export default function DirectCallRoom() {
 
         // Nếu đã có PC rồi → set remote description với answer
         try {
+          if (pc.signalingState !== 'have-local-offer') {
+            console.warn('onCallAccepted (DirectCallRoom): pc not in have-local-offer, skipping setRemoteDescription', pc.signalingState);
+            return;
+          }
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           remotePeerIdRef.current = from;
           if (startedAt) startedAtRef.current = startedAt;
@@ -771,7 +773,14 @@ export default function DirectCallRoom() {
 
       // Active state: renegotiate
       if (pcRef.current) {
-        try { await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer)); } catch {}
+        try {
+          if (!pcRef.current) return;
+          if (pcRef.current.signalingState !== 'have-local-offer') {
+            console.warn('onCallAccepted (DirectCallRoom active): pcRef not in have-local-offer, skipping');
+            return;
+          }
+          await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch {}
       }
     };
 
@@ -788,10 +797,14 @@ export default function DirectCallRoom() {
           await pc.__videoSender.replaceTrack(stream?.getVideoTracks().find(isLive) || null);
         }
         try {
-          await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit('accept_call', { to: data.from, answer, callId, conversationId });
+          if (pc.signalingState !== 'stable') {
+            console.warn('onIncomingCall reoffer: pc not stable, skipping reoffer from', data.from);
+          } else {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('accept_call', { to: data.from, answer, callId, conversationId });
+          }
         } catch (e) { console.error('incoming reoffer:', e); }
         setStatus('active');
         startTimer(startedAtRef.current);
@@ -818,10 +831,25 @@ export default function DirectCallRoom() {
       if (!pcRef.current || !candidate) return;
       try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
     };
-
+    // Tìm onVideoToggle:
     const onVideoToggle = ({ from, enabled }) => {
       if (String(from) !== String(remotePeerIdRef.current)) return;
       setRemoteCamOn(Boolean(enabled));
+      
+      // Trigger re-attach video element nếu peer bật cam
+      if (enabled && remoteVideoRef.current) {
+        const stream = remoteVideoRef.current.srcObject;
+        if (stream) {
+          // Re-attach để đảm bảo video element hiển thị track mới
+          remoteVideoRef.current.srcObject = null;
+          setTimeout(() => {
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = stream;
+              remoteVideoRef.current.play().catch(() => {});
+            }
+          }, 100);
+        }
+      }
     };
 
     const onAudioToggle = ({ from, enabled }) => {

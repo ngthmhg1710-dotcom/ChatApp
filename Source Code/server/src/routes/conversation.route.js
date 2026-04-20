@@ -8,7 +8,8 @@ import {
   addParticipant,
   removeParticipant,
   leaveGroup,
-  deleteGroup
+  deleteGroup,
+  transferLeadership  // 👈 Thêm import mới
 } from '../controllers/conversation.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 
@@ -26,5 +27,7 @@ router.post('/:id/participants', addParticipant);
 router.delete('/:id/participants/:userId', removeParticipant);
 router.post('/:id/leave', leaveGroup);
 router.delete('/:id', deleteGroup);
+
+router.post('/:id/transfer-leadership', transferLeadership);
 
 export default router;

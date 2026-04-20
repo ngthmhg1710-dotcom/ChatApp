@@ -36,7 +36,13 @@ function Avatar({ username = '', size = 'md', avatarUrl }) {
   const sz = { xs:'w-6 h-6 text-[10px]', sm:'w-8 h-8 text-xs', md:'w-10 h-10 text-sm', lg:'w-12 h-12 text-base', xl:'w-16 h-16 text-xl' }[size] || 'w-10 h-10 text-sm';
   return avatarUrl
     ? <img src={getFileUrl(avatarUrl)} alt={username} className={`${sz} rounded-full object-cover flex-shrink-0`} onError={e=>e.target.style.display='none'} />
-    : <div className={`${sz} ${color} rounded-full flex items-center justify-center font-bold text-white select-none flex-shrink-0`}>{initials}</div>;
+    : (
+      <div className={`${sz} rounded-full bg-pink-400 flex items-center justify-center select-none flex-shrink-0`}>
+        <svg viewBox="0 0 24 24" className="w-5 h-5 text-yellow-300" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zM12 14c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+        </svg>
+      </div>
+    );
 }
 
 function GroupAvatarStack({ participants = [], groupAvatar, size = 'xl' }) {
@@ -133,7 +139,11 @@ function AddMemberModal({ conversation, onClose, onAdded, currentUser }) {
     try {
       const { data } = await axios.post(`${API_URL}/conversations/${conversation._id}/participants`, { userId: friend._id });
       setAdded(prev => new Set([...prev, friend._id]));
-      toast.success(`Đã thêm ${friend.username} vào nhóm`);
+      
+      const addedMember = data.data || friend;
+      const memberName = addedMember.username || friend.username || 'thành viên';
+      toast.success(`Đã thêm ${memberName} vào nhóm`);
+      
       onAdded(data.data || friend);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Không thể thêm thành viên');
@@ -222,11 +232,43 @@ export default function GroupInfoPanel({
   const memberCount = members.length;
   const isCommunity = memberCount >= COMMUNITY_THRESHOLD;
   const muteNotif   = muteMap ? (muteMap[conversation?._id] ?? false) : false;
+  const [showTransferConfirm, setShowTransferConfirm] = useState(false);
+  const [selectedNewLeader, setSelectedNewLeader] = useState(null);
+
 
   useEffect(() => {
     setMembers(conversation?.participants || []);
     setNewName(conversation?.name || '');
   }, [conversation]);
+
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleMemberUpdate = (data) => {
+      const updatedConv = data.conversation || data;
+      if (updatedConv?._id === conversation?._id) {
+        setMembers(updatedConv.participants || []);
+        onConversationUpdated?.(updatedConv);
+        
+        // ✅ Thêm thông báo khi có thành viên mới
+        if (data.addedMember) {
+          const memberName = data.addedMember.username || 
+                            (typeof data.addedMember === 'object' ? data.addedMember.username : 'Thành viên');
+          toast.success(`${memberName} đã được thêm vào nhóm`);
+        }
+      }
+    };
+    
+    socket.on('member_removed', handleMemberUpdate);
+    socket.on('member_added', handleMemberUpdate);
+    socket.on('member_left', handleMemberUpdate);
+    
+    return () => {
+      socket.off('member_removed', handleMemberUpdate);
+      socket.off('member_added', handleMemberUpdate);
+      socket.off('member_left', handleMemberUpdate);
+    };
+  }, [socket, conversation?._id, onConversationUpdated]);
 
   useEffect(() => {
     if (!socket) return;
@@ -291,38 +333,114 @@ export default function GroupInfoPanel({
     finally { setLoading(false); }
   };
 
-  const handleRemoveMember = (memberId, memberName) => {
-    if (!isAdmin) {
-      toast.error('Chỉ trưởng nhóm mới có thể xóa thành viên');
-      return;
+const handleRemoveMember = (memberId, memberName) => {
+  if (!isAdmin) {
+    toast.error('Chỉ trưởng nhóm mới có thể xóa thành viên');
+    return;
+  }
+
+  setConfirm({
+    title: 'Xóa thành viên',
+    message: `Xóa ${memberName} khỏi nhóm?`,
+    onConfirm: async () => {
+      try {
+        // 1. Gọi API xóa
+        const { data } = await axios.delete(
+          `${API_URL}/conversations/${conversation._id}/participants/${memberId}`
+        );
+
+        // 2. Cập nhật State tại chỗ bằng cách lọc (filter)
+        // Cách này đảm bảo UI biến mất ngay lập tức bất kể server trả về gì
+        const newMembers = members.filter((m) => {
+          const uid = typeof m === 'object' ? m._id?.toString() : m.toString();
+          return uid !== memberId;
+        });
+
+        // 3. Cập nhật các state liên quan
+        setMembers(newMembers);
+
+        // Cập nhật object conversation cha nếu cần
+        const updatedConv = {
+          ...conversation,
+          participants: newMembers,
+        };
+        onConversationUpdated?.(updatedConv);
+
+        toast.success(`Đã xóa ${memberName}`);
+
+        // 4. Đồng bộ hóa sự kiện (nếu có các component khác đang lắng nghe)
+        window.dispatchEvent(
+          new CustomEvent('group-members-updated', {
+            detail: { conversationId: conversation._id, members: newMembers },
+          })
+        );
+      } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.message || 'Không thể xóa');
+      }
+      setConfirm(null);
+    },
+  });
+};
+
+
+  const handleTransferLeadership = async (newLeaderId, newLeaderName) => {
+    setLoading(true);
+    try {
+      const { data } = await axios.post(`${API_URL}/conversations/${conversation._id}/transfer-leadership`, {
+        newLeaderId: newLeaderId
+      });
+      
+      // Chỉ hiển thị 1 toast thông báo
+      toast.success(`Đã chuyển quyền nhóm trưởng cho ${newLeaderName} và rời nhóm`);
+      
+      onConversationUpdated?.(data.data || conversation);
+      setShowTransferConfirm(false);
+      setSelectedNewLeader(null);
+      
+      // Đóng panel info sau khi rời nhóm
+      onGroupLeft?.(data.data || conversation);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể chuyển quyền nhóm trưởng');
+      setLoading(false);
     }
-    setConfirm({
-      title: 'Xóa thành viên', message: `Xóa ${memberName} khỏi nhóm?`,
-      onConfirm: async () => {
-        try {
-          const { data } = await axios.delete(`${API_URL}/conversations/${conversation._id}/participants/${memberId}`);
-          setMembers(data.data?.participants || []);
-          onConversationUpdated?.(data.data || conversation);
-          toast.success(`Đã xóa ${memberName}`);
-        } catch (err) { toast.error(err.response?.data?.message || 'Không thể xóa'); }
-        setConfirm(null);
-      },
-    });
   };
 
   const handleLeaveGroup = () => {
-    setConfirm({
-      title: 'Rời nhóm', message: `Bạn sẽ rời khỏi nhóm "${conversation.name}".`,
-      onConfirm: async () => {
-        try {
-          const { data } = await axios.post(`${API_URL}/conversations/${conversation._id}/leave`);
-          toast.success('Đã rời nhóm');
-          onGroupLeft?.(data.data || conversation);
-        }
-        catch (err) { toast.error(err.response?.data?.message || 'Không thể rời nhóm'); }
-        setConfirm(null);
-      },
-    });
+    if (isAdmin) {
+      const otherMembers = members.filter(mem => 
+        (mem._id?.toString() !== currentUser?._id?.toString())
+      );
+      
+      if (otherMembers.length === 0) {
+        setConfirm({
+          title: 'Không thể rời nhóm',
+          message: 'Bạn là thành viên duy nhất. Hãy giải tán nhóm nếu muốn thoát.',
+          danger: false,
+          onConfirm: () => setConfirm(null),
+        });
+        return;
+      }
+      
+      // Hiển thị modal chọn người kế nhiệm
+      setShowTransferConfirm(true);
+    } else {
+      // Thành viên thường rời nhóm bình thường
+      setConfirm({
+        title: 'Rời nhóm',
+        message: `Bạn sẽ rời khỏi nhóm "${conversation.name}".`,
+        onConfirm: async () => {
+          try {
+            const { data } = await axios.post(`${API_URL}/conversations/${conversation._id}/leave`);
+            toast.success('Đã rời nhóm');
+            onGroupLeft?.(data.data || conversation);
+          } catch (err) {
+            toast.error(err.response?.data?.message || 'Không thể rời nhóm');
+          }
+          setConfirm(null);
+        },
+      });
+    }
   };
 
   const handleDissolveGroup = () => {
@@ -365,8 +483,16 @@ export default function GroupInfoPanel({
 
   const handleToggleMute = () => {
     const newVal = !muteNotif;
+
+    try {
+      const map = JSON.parse(localStorage.getItem('chat_mute_map') || '{}');
+      map[conversation?._id] = newVal;
+      localStorage.setItem('chat_mute_map', JSON.stringify(map));
+      window.dispatchEvent(new CustomEvent('chat-mute-map-updated', { detail: map }));
+    } catch (e) {}
+
     onMuteChange?.(conversation?._id, newVal);
-    toast(newVal ? '🔕 Đã tắt nhấn mạnh trong danh sách chat. Sidebar vẫn hiện số tin mới.' : '🔔 Đã bật thông báo đầy đủ trong chat');
+    toast(newVal ? ' Đã tắt thông báo cho cuộc trò chuyện này' : ' Đã bật lại thông báo cho cuộc trò chuyện này');
   };
 
   return (
@@ -383,6 +509,8 @@ export default function GroupInfoPanel({
             <GroupAvatarStack participants={members} groupAvatar={conversation?.avatar} size="xl" />
           </div>
 
+          <div className="flex items-center gap-2 mt-1 flex-wrap justify-center">
+
           {editingName ? (
             <div className="flex items-center gap-2 w-full px-4">
               <input value={newName} onChange={e => setNewName(e.target.value)}
@@ -398,6 +526,7 @@ export default function GroupInfoPanel({
               {isAdmin && <button onClick={() => setEditingName(true)} className="text-gray-400 hover:text-gray-600 transition"><Edit3 className="w-4 h-4" /></button>}
             </div>
           )}
+          </div>
 
           <div className="flex items-center gap-2 mt-1 flex-wrap justify-center">
             {isCommunity
@@ -486,12 +615,12 @@ export default function GroupInfoPanel({
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition ${muteNotif ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-gray-50'}`}>
             {muteNotif ? <BellOff className="w-4 h-4 text-orange-500" /> : <Bell className="w-4 h-4 text-gray-500" />}
             <span className={`text-sm flex-1 text-left font-medium ${muteNotif ? 'text-orange-600' : 'text-gray-700'}`}>
-              {muteNotif ? 'Bật thông báo' : 'Tắt thông báo trong khung chat'}
+              {muteNotif ? 'Bật thông báo' : 'Tắt thông báo'}
             </span>
             {muteNotif && <span className="text-[10px] text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full font-semibold">Đang tắt</span>}
           </button>
           <p className="text-[10px] text-gray-400 px-1 mt-1 leading-snug">
-            Sidebar vẫn hiện số tin chưa đọc; chỉ giảm nhấn mạnh trong danh sách chat khi đang tắt.
+            Khi đã tắt, cuộc trò chuyện này sẽ không hiện badge hay số tin mới ở sidebar.
           </p>
         </div>
 
@@ -537,43 +666,43 @@ export default function GroupInfoPanel({
           </div>
         </div>
 
-        {/* Danger zone */}
-        {isAdmin && isCurrentMember && !isDissolved && (
-          <div className="px-4 py-3 mt-2 border-t border-gray-100">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Vùng nguy hiểm</p>
-            <details className="group">
-              <summary className="flex items-center justify-between cursor-pointer text-xs text-gray-500 hover:text-red-500 transition list-none">
-                <div className="flex items-center gap-2"><Shield className="w-4 h-4" /><span>Tuỳ chọn nâng cao</span></div>
-                <ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform" />
-              </summary>
-              <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-xl space-y-3">
-                <p className="text-xs text-red-600">⚠️ Hành động bên dưới không thể hoàn tác.</p>
-                <div>
-                  <p className="text-[11px] font-bold text-red-800 mb-2">Xóa thành viên</p>
-                  <p className="text-[10px] text-red-500/90 mb-2">Chỉ trưởng nhóm mới thực hiện được. Không thể xóa trưởng nhóm.</p>
-                  {removableMembers.length === 0 ? (
-                    <p className="text-[10px] text-gray-500 italic py-1">Không có thành viên nào có thể xóa.</p>
-                  ) : (
-                    <ul className="space-y-1.5 max-h-40 overflow-y-auto">
-                      {removableMembers.map((mem) => {
-                        const u = typeof mem === 'object' ? mem : { _id: mem };
-                        const uid = u._id?.toString();
-                        return (
-                          <li key={uid} className="flex items-center gap-2 py-1.5 px-2 bg-white/80 rounded-lg border border-red-100">
-                            <Avatar username={u.username || '?'} size="xs" avatarUrl={u.avatar} />
-                            <span className="flex-1 text-xs font-medium text-gray-800 truncate">{u.username || 'Người dùng'}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMember(uid, u.username)}
-                              title="Xóa khỏi nhóm"
-                              className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition flex-shrink-0"
-                            >
-                              <UserMinus className="w-3.5 h-3.5" />
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
+      {/* Danger zone */}
+      {isAdmin && isCurrentMember && !isDissolved && (
+        <div className="px-4 py-3 mt-2 border-t border-gray-100">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">NÂNG CAO</p>
+          <details className="group">
+            <summary className="flex items-center justify-between cursor-pointer text-xs text-gray-500 hover:text-red-500 transition list-none">
+              <div className="flex items-center gap-2"><Shield className="w-4 h-4" /><span>Tuỳ chọn nâng cao</span></div>
+              <ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform" />
+            </summary>
+            <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-xl space-y-3">
+              <p className="text-xs text-red-600"> Hành động bên dưới không thể hoàn tác.</p>
+              <div>
+                <p className="text-[11px] font-bold text-red-800 mb-2">Xóa thành viên</p>
+                <p className="text-[10px] text-red-500/90 mb-2">Chỉ trưởng nhóm mới thực hiện được. Không thể xóa trưởng nhóm.</p>
+                {removableMembers.length === 0 ? (
+                  <p className="text-[10px] text-gray-500 italic py-1">Không còn thành viên nào để có thể xóa.</p>
+                ) : (
+                  <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {removableMembers.map((mem) => {
+                      const u = typeof mem === 'object' ? mem : { _id: mem };
+                      const uid = u._id?.toString();
+                      return (
+                        <li key={`${uid}-${members.length}`} className="flex items-center gap-2 py-1.5 px-2 bg-white/80 rounded-lg border border-red-100">
+                          <Avatar username={u.username || '?'} size="xs" avatarUrl={u.avatar} />
+                          <span className="flex-1 text-xs font-medium text-gray-800 truncate">{u.username || 'Người dùng'}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMember(uid, u.username)}
+                            title="Xóa khỏi nhóm"
+                            className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition flex-shrink-0"
+                          >
+                            <UserMinus className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                   )}
                 </div>
                 <div className="pt-2 border-t border-red-200/80">
@@ -610,6 +739,79 @@ export default function GroupInfoPanel({
           onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)}
         />
       )}
-    </div>
+
+            
+      {showTransferConfirm && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-96 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-gray-800 text-base">Chuyển quyền nhóm trưởng</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Bạn cần chọn người kế nhiệm để rời nhóm</p>
+              </div>
+              <button onClick={() => {
+                setShowTransferConfirm(false);
+                setSelectedNewLeader(null);
+              }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              <p className="text-sm text-gray-600 mb-3">Chọn thành viên sẽ làm nhóm trưởng mới:</p>
+              <div className="space-y-2">
+                {members.filter(mem => mem._id?.toString() !== currentUser?._id?.toString()).map((member) => {
+                  const memberId = member._id?.toString();
+                  const isSelected = selectedNewLeader === memberId;
+                  return (
+                    <button
+                      key={memberId}
+                      onClick={() => setSelectedNewLeader(memberId)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition text-left
+                        ${isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}
+                    >
+                      <Avatar username={member.username || '?'} size="md" avatarUrl={member.avatar} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{member.username || 'Người dùng'}</p>
+                        <p className="text-xs text-gray-400 truncate">{member.email || ''}</p>
+                      </div>
+                      {isSelected && <Check className="w-5 h-5 text-blue-600 flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
+              <button
+                onClick={() => {
+                  setShowTransferConfirm(false);
+                  setSelectedNewLeader(null);
+                }}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-600 text-sm font-semibold rounded-xl hover:bg-gray-200 transition"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  if (!selectedNewLeader) {
+                    toast.error('Vui lòng chọn người kế nhiệm');
+                    return;
+                  }
+                  const newLeader = members.find(m => m._id?.toString() === selectedNewLeader);
+                  handleTransferLeadership(selectedNewLeader, newLeader?.username || 'thành viên');
+                }}
+                disabled={!selectedNewLeader || loading}
+                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Chuyển quyền và rời nhóm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>  
   );
 }
+

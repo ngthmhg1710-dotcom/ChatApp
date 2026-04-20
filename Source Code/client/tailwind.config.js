@@ -23,7 +23,7 @@ export default {
     },
   },
 
-  plugins: [],
+  plugins: [require('@tailwindcss/typography')],
   /** @type {import('tailwindcss').Config} */
 
   // FIX: darkMode 'class' để toggle bằng class .dark trên <html>
@@ -35,5 +35,5 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/typography')],
 }

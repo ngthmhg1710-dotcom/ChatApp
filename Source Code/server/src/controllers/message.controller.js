@@ -224,3 +224,26 @@ export const uploadFile = async (req, res) => {
     });
   }
 };
+
+// @desc    Mark messages as read
+// @route   PUT /api/messages/:conversationId/read
+export const markMessagesAsRead = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+
+    await Message.updateMany(
+      {
+        conversation: conversationId,
+        sender: { $ne: userId },
+        readBy: { $ne: userId },
+      },
+      { $addToSet: { readBy: userId } }
+    );
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Mark messages read error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

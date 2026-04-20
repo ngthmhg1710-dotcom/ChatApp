@@ -20,6 +20,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false,
+    // Enable sourcemaps for production builds to aid debugging of minified errors
+    sourcemap: true,
   },
 });

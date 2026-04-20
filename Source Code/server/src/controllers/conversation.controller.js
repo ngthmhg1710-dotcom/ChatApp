@@ -1,9 +1,20 @@
+import mongoose from 'mongoose';
 import Conversation from '../models/conversation.model.js';
 import Message from '../models/message.model.js';
 import { emitToUser } from '../sockets/index.js';
 
 const MAX_MEMBERS         = 300;
 const COMMUNITY_THRESHOLD = 300;
+
+async function getUserName(userId) {
+  try {
+    const user = await mongoose.model('User').findById(userId).select('username');
+    return user?.username || null;
+  } catch (error) {
+    console.error('Get user name error:', error);
+    return null;
+  }
+}
 
 function isGroupConversation(conversation) {
   if (!conversation) return false;
@@ -70,9 +81,22 @@ export const createConversation = async (req, res) => {
     const currentUserId = req.user.id;
     if (!participantId)
       return res.status(400).json({ success: false, message: 'Participant ID is required' });
-    const conversation = await Conversation.createOrGetPrivate(currentUserId, participantId);
+    const normalizedParticipantId = participantId.toString();
+    const conversation = normalizedParticipantId === currentUserId.toString()
+      ? await Conversation.createOrGetPersonal(currentUserId)
+      : await Conversation.createOrGetPrivate(currentUserId, normalizedParticipantId);
     await conversation.populate('participants', 'username email avatar isOnline lastSeen');
     await conversation.populate('lastMessage');
+    
+    // Emit socket cho cả 2 người dùng
+    const conversationData = conversation.toObject();
+    conversation.participants.forEach(participant => {
+      emitToUser(participant._id.toString(), 'conversation_created', {
+        conversation: conversationData,
+        type: 'new_conversation'
+      });
+    });
+    
     res.status(200).json({ success: true, data: conversation });
   } catch (error) {
     console.error('Create conversation error:', error);
@@ -80,8 +104,8 @@ export const createConversation = async (req, res) => {
   }
 };
 
-// @desc    Create group conversation
-// @route   POST /api/conversations/group
+// @desc    Create or get private conversation
+// @route   POST /api/conversations
 export const createGroupConversation = async (req, res) => {
   try {
     const { name, participantIds } = req.body;
@@ -105,7 +129,8 @@ export const createGroupConversation = async (req, res) => {
       admin: currentUserId,
     });
 
-    await conversation.populate('participants', 'username email avatar isOnline');
+    // Populate đầy đủ dữ liệu trước khi emit
+    await conversation.populate('participants', 'username email avatar isOnline lastSeen');
     await conversation.populate('admin', 'username email avatar');
 
     await Message.create({
@@ -115,14 +140,19 @@ export const createGroupConversation = async (req, res) => {
       content: `${req.user.username} đã tạo nhóm "${name}"`,
     });
 
-    // Notify all participants
+    // Chuyển conversation thành object để emit
+    const conversationData = conversation.toObject();
+    
+    // Notify all participants (kể cả người tạo) để cập nhật realtime
     allParticipants.forEach(participantId => {
-      if (participantId.toString() !== currentUserId.toString()) {
-        emitToUser(participantId.toString(), 'group_created', { conversation });
-      }
+      emitToUser(participantId.toString(), 'group_created', { 
+        conversation: conversationData,
+        type: 'new_group',
+        createdBy: currentUserId
+      });
     });
 
-    res.status(201).json({ success: true, data: conversation });
+    res.status(201).json({ success: true, data: conversationData });
   } catch (error) {
     console.error('Create group error:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -147,10 +177,39 @@ export const getConversations = async (req, res) => {
       })
       .sort({ updatedAt: -1 });
 
+    // Đếm unread cho từng conversation
     const userId = req.user.id;
+    const conversationIds = conversations.map(c => c._id);
+    const unreadAgg = await Message.aggregate([
+      {
+        $match: {
+          conversation: { $in: conversationIds },
+          sender: { $ne: new mongoose.Types.ObjectId(userId) },
+          readBy: { $ne: new mongoose.Types.ObjectId(userId) },
+          deletedFor: { $ne: new mongoose.Types.ObjectId(userId) },
+        }
+      },
+      {
+        $group: {
+          _id: '$conversation',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const unreadMap = {};
+    unreadAgg.forEach(({ _id, count }) => {
+      unreadMap[_id.toString()] = count;
+    });
+
     const result = await Promise.all(
-      conversations.map((conv) => sanitizeConversationForUser(conv, userId))
+      conversations.map(async (conv) => {
+        const sanitized = await sanitizeConversationForUser(conv, userId);
+        sanitized.unreadCount = unreadMap[conv._id.toString()] || 0;
+        return sanitized;
+      })
     );
+
     result.sort(
       (a, b) => new Date(b.updatedAt || b.historyVisibleUntil || 0) - new Date(a.updatedAt || a.historyVisibleUntil || 0)
     );
@@ -234,6 +293,8 @@ export const updateGroup = async (req, res) => {
 
 // @desc    Add participant to group
 // @route   POST /api/conversations/:id/participants
+// @desc    Add participant to group
+// @route   POST /api/conversations/:id/participants
 export const addParticipant = async (req, res) => {
   try {
     const { userId } = req.body;
@@ -247,6 +308,12 @@ export const addParticipant = async (req, res) => {
       return res.status(400).json({ success: false, message: `Nhóm đã đủ ${MAX_MEMBERS} thành viên` });
 
     if (!conversation.participants.map(p => p.toString()).includes(userId)) {
+      // ✅ Lấy thông tin user trước khi thêm
+      const userToAdd = await mongoose.model('User').findById(userId).select('username email avatar');
+      if (!userToAdd) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
       conversation.participants.push(userId);
 
       // Xóa khỏi formerParticipants nếu được thêm lại
@@ -267,15 +334,40 @@ export const addParticipant = async (req, res) => {
         conversation: conversation._id,
         sender: req.user.id,
         type: 'system',
-        content: `${req.user.username} đã thêm một thành viên mới`,
+        content: `${req.user.username} đã thêm ${userToAdd.username} vào nhóm`,
       });
 
-      await conversation.populate('participants', 'username email avatar isOnline');
+      await conversation.populate('participants', 'username email avatar isOnline lastSeen');
+      await conversation.populate('admin', 'username email avatar');
+      
+      const conversationData = conversation.toObject();
 
-      emitToUser(userId, 'added_to_group', { conversation });
+      // ✅ Emit cho người được thêm - gửi kèm thông tin user
+      emitToUser(userId, 'added_to_group', { 
+        conversation: conversationData,
+        type: 'member_added',
+        addedBy: {
+          _id: req.user.id,
+          username: req.user.username
+        }
+      });
 
+      // ✅ Emit cho tất cả thành viên hiện tại - gửi kèm thông tin user
       conversation.participants.forEach(p => {
-        emitToUser(p._id.toString(), 'member_added', { conversation });
+        emitToUser(p._id.toString(), 'member_added', { 
+          conversation: conversationData,
+          addedUser: {
+            _id: userToAdd._id,
+            username: userToAdd.username,
+            email: userToAdd.email,
+            avatar: userToAdd.avatar
+          },
+          addedBy: {
+            _id: req.user.id,
+            username: req.user.username
+          },
+          type: 'member_added'
+        });
       });
     }
 
@@ -300,18 +392,18 @@ export const removeParticipant = async (req, res) => {
     if (userId === req.user.id)
       return res.status(400).json({ success: false, message: 'Admin không thể tự xóa mình' });
 
-    // ── FIX: ghi lại thời điểm bị kick vào formerParticipantMeta ──────────────
     const kickedAt = new Date();
+    // ✅ Lấy thông tin user bị kick trước khi xóa
+    const kickedUser = await mongoose.model('User').findById(userId).select('username email avatar');
+    const kickedUserName = kickedUser?.username || 'một thành viên';
 
     conversation.participants = conversation.participants.filter(p => p.toString() !== userId);
 
-    // Thêm vào formerParticipants nếu chưa có
     if (!(conversation.formerParticipants || []).some(p => p.toString() === userId)) {
       if (!conversation.formerParticipants) conversation.formerParticipants = [];
       conversation.formerParticipants.push(userId);
     }
 
-    // Cập nhật hoặc thêm mới formerParticipantMeta với leftAt & historyVisibleUntil
     if (!conversation.formerParticipantMeta) conversation.formerParticipantMeta = [];
     const existingMetaIdx = conversation.formerParticipantMeta.findIndex(
       m => (m.user?._id || m.user)?.toString() === userId.toString()
@@ -323,10 +415,9 @@ export const removeParticipant = async (req, res) => {
       conversation.formerParticipantMeta.push({
         user: userId,
         leftAt: kickedAt,
-        historyVisibleUntil: kickedAt,  // <-- user chỉ xem đến thời điểm này
+        historyVisibleUntil: kickedAt,
       });
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     await conversation.save();
 
@@ -334,25 +425,46 @@ export const removeParticipant = async (req, res) => {
       conversation: conversation._id,
       sender: req.user.id,
       type: 'system',
-      content: `${req.user.username} đã xóa một thành viên`,
+      content: `${req.user.username} đã xóa ${kickedUserName} khỏi nhóm`,
     });
 
-    await conversation.populate('participants', 'username email avatar isOnline');
+    await conversation.populate('participants', 'username email avatar isOnline lastSeen');
     await conversation.populate('admin', 'username email avatar');
-    await conversation.populate('formerParticipantMeta.user', 'username email avatar');
+    
+    const conversationData = conversation.toObject();
 
-    // Notify người bị kick với conversation đã cập nhật (có historyVisibleUntil)
+    // Notify người bị kick - gửi kèm thông tin
     const convForKicked = conversation.toObject();
     const kickedMeta = (convForKicked.formerParticipantMeta || []).find(
       m => (m.user?._id || m.user)?.toString() === userId.toString()
     );
     convForKicked.historyVisibleUntil = kickedMeta?.historyVisibleUntil || kickedAt;
 
-    emitToUser(userId, 'removed_from_group', { conversation: convForKicked });
+    emitToUser(userId, 'removed_from_group', { 
+      conversation: convForKicked,
+      removedBy: {
+        _id: req.user.id,
+        username: req.user.username
+      },
+      type: 'member_removed'
+    });
 
-    // Notify remaining members
+    // Notify remaining members - gửi kèm thông tin user bị xóa
     conversation.participants.forEach(p => {
-      emitToUser(p._id.toString(), 'member_removed', { conversation });
+      emitToUser(p._id.toString(), 'member_removed', { 
+        conversation: conversationData,
+        removedUser: kickedUser ? {
+          _id: kickedUser._id,
+          username: kickedUser.username,
+          email: kickedUser.email,
+          avatar: kickedUser.avatar
+        } : { _id: userId, username: kickedUserName },
+        removedBy: {
+          _id: req.user.id,
+          username: req.user.username
+        },
+        type: 'member_removed'
+      });
     });
 
     res.status(200).json({ success: true, message: 'Participant removed successfully' });
@@ -476,5 +588,79 @@ export const deleteGroup = async (req, res) => {
   } catch (error) {
     console.error('Delete group error:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+// @desc    Transfer group leadership to another member
+// @route   POST /api/conversations/:id/transfer-leadership
+export const transferLeadership = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newLeaderId } = req.body;
+    const userId = req.user.id;
+
+    // Tìm conversation
+    const conversation = await Conversation.findById(id);
+    if (!conversation || !conversation.isGroup) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy nhóm' });
+    }
+
+    // Kiểm tra người dùng hiện tại có phải admin không
+    if (conversation.admin.toString() !== userId) {
+      return res.status(403).json({ success: false, message: 'Chỉ trưởng nhóm mới có thể chuyển quyền' });
+    }
+
+    // Kiểm tra người nhận có trong nhóm không
+    const isNewLeaderInGroup = conversation.participants.some(
+      p => p.toString() === newLeaderId.toString()
+    );
+    if (!isNewLeaderInGroup) {
+      return res.status(404).json({ success: false, message: 'Người dùng không phải thành viên của nhóm' });
+    }
+
+    // Kiểm tra không chuyển cho chính mình
+    if (newLeaderId.toString() === userId.toString()) {
+      return res.status(400).json({ success: false, message: 'Không thể chuyển quyền cho chính mình' });
+    }
+
+    // Lưu tên người nhận để thông báo
+    const newLeader = await mongoose.model('User').findById(newLeaderId).select('username');
+    const oldLeader = req.user;
+
+    // Cập nhật admin mới
+    conversation.admin = newLeaderId;
+    await conversation.save();
+
+    // Tạo message hệ thống
+    await Message.create({
+      conversation: conversation._id,
+      sender: userId,
+      type: 'system',
+      content: `${oldLeader.username} đã chuyển quyền trưởng nhóm cho ${newLeader?.username || 'thành viên khác'}`,
+    });
+
+    // Populate dữ liệu để trả về
+    await conversation.populate('participants', 'username email avatar isOnline lastSeen');
+    await conversation.populate('admin', 'username email avatar');
+    await conversation.populate('lastMessage');
+
+    // Chỉ emit socket cho các thành viên còn lại (không gửi cho người vừa rời)
+    conversation.participants.forEach(participant => {
+      // Không gửi cho người vừa chuyển quyền (họ sẽ rời nhóm ngay sau)
+      if (participant._id.toString() !== userId.toString()) {
+        emitToUser(participant._id.toString(), 'promoted_to_admin', {
+          conversation,
+          message: `${oldLeader.username} đã chuyển quyền trưởng nhóm cho ${newLeader?.username || 'thành viên khác'}`,
+        });
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: conversation,
+      message: `Đã chuyển quyền trưởng nhóm cho ${newLeader?.username || 'thành viên khác'}`
+    });
+  } catch (error) {
+    console.error('Transfer leadership error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };

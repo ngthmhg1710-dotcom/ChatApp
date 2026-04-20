@@ -538,18 +538,38 @@ export const setupCallHandlers = (io, socket) => {
   // SPEAKING STATE  (VAD)
   // ═══════════════════════════════════════════════════════════════════════════
   socket.on('speaking_state', ({ callId, speaking, lastSpokeAt }) => {
-    if (!callId) return;
-    const call = activeCalls.get(callId);
-    if (!call || !call.participants.has(socket.userId)) return;
-    for (const pid of call.participants) {
-      if (pid !== socket.userId) {
-        io.to(`user:${pid}`).emit('peer_speaking_state', {
-          from: socket.userId,
-          speaking: !!speaking,
-          lastSpokeAt: lastSpokeAt || Date.now(),
-          callId,
-        });
+    // support speaking_state with either callId (preferred) or direct 'to' user
+    if (callId) {
+      const call = activeCalls.get(callId);
+      if (!call || !call.participants.has(socket.userId)) return;
+      for (const pid of call.participants) {
+        if (pid !== socket.userId) {
+          io.to(`user:${pid}`).emit('peer_speaking_state', {
+            from: socket.userId,
+            speaking: !!speaking,
+            lastSpokeAt: lastSpokeAt || Date.now(),
+            callId,
+          });
+        }
       }
+      return;
+    }
+    // fallback: accept { to } to target a single peer (used by lightweight CallManager)
+    if (typeof speaking !== 'undefined') {
+      // try to read a 'to' field from the emitted payload via arguments
+      // Note: many clients will emit { to, speaking }
+      try {
+        const args = arguments && arguments[0] ? arguments[0] : {};
+        const to = args.to || null;
+        if (to) {
+          io.to(`user:${to}`).emit('peer_speaking_state', {
+            from: socket.userId,
+            speaking: !!speaking,
+            lastSpokeAt: lastSpokeAt || Date.now(),
+            callId: null,
+          });
+        }
+      } catch (e) {}
     }
   });
 

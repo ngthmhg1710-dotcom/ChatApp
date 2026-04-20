@@ -1,4 +1,5 @@
 import User from '../models/user.model.js';
+import Conversation from '../models/conversation.model.js';
 
 const activeUsers = new Map();
 
@@ -14,12 +15,21 @@ export const setupPresenceHandlers = (io, socket) => {
         lastSeen: new Date(),
       });
 
-      const user = await User.findById(socket.userId).select('friends');
-      if (user?.friends?.length) {
-        user.friends.forEach(friendId => {
-          io.to(`user:${friendId.toString()}`).emit('user_online', { userId: socket.userId });
-        });
-      }
+      // Tìm tất cả bạn bè và những người cùng trong các cuộc hội thoại để thông báo
+      const [user, conversations] = await Promise.all([
+        User.findById(socket.userId).select('friends'),
+        Conversation.find({ participants: socket.userId }).select('participants')
+      ]);
+
+      const notifyIds = new Set(user?.friends?.map(f => f.toString()) || []);
+      conversations.forEach(c => c.participants.forEach(p => {
+        const pid = p._id ? p._id.toString() : p.toString();
+        if (pid !== socket.userId) notifyIds.add(pid);
+      }));
+
+      notifyIds.forEach(id => {
+        io.to(`user:${id}`).emit('user_online', { userId: socket.userId });
+      });
 
       // Gửi lại danh sách bạn đang online cho người vừa connect
       const onlineFriends = (user?.friends || [])
@@ -54,12 +64,21 @@ export const setupPresenceHandlers = (io, socket) => {
           lastSeen: new Date(),
         });
 
-        const user = await User.findById(socket.userId).select('friends');
-        if (user?.friends?.length) {
-          user.friends.forEach(friendId => {
-            io.to(`user:${friendId.toString()}`).emit('user_offline', { userId: socket.userId });
-          });
-        }
+        // Thông báo offline cho cả bạn bè và thành viên các cuộc hội thoại
+        const [user, conversations] = await Promise.all([
+          User.findById(socket.userId).select('friends'),
+          Conversation.find({ participants: socket.userId }).select('participants')
+        ]);
+
+        const notifyIds = new Set(user?.friends?.map(f => f.toString()) || []);
+        conversations.forEach(c => c.participants.forEach(p => {
+          const pid = p._id ? p._id.toString() : p.toString();
+          if (pid !== socket.userId) notifyIds.add(pid);
+        }));
+
+        notifyIds.forEach(id => {
+          io.to(`user:${id}`).emit('user_offline', { userId: socket.userId });
+        });
 
         console.log(`User ${socket.userId} is now offline`);
       }

@@ -29,9 +29,12 @@ export const useSocket = () => {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+      timeout: 10000,
+      forceNew: false,
+      multiplex: true,
     });
 
     socket.on('connect', () => {
@@ -58,7 +61,15 @@ export const useSocket = () => {
       socket.emit('user_online');
     });
 
+    // Heartbeat để phát hiện mất kết nối nhanh hơn trên mobile
+    const heartbeatInterval = setInterval(() => {
+      if (socket?.connected) {
+        socket.emit('ping');
+      }
+    }, 5000);
+
     return () => {
+      clearInterval(heartbeatInterval);
       if (socket) {
         socket.disconnect();
         socket = null;

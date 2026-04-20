@@ -95,6 +95,16 @@ conversationSchema.statics.findPrivateConversation = async function(user1Id, use
   });
 };
 
+conversationSchema.statics.findPersonalConversation = async function(userId) {
+  return await this.findOne({
+    type: 'private',
+    $and: [
+      { participants: userId },
+      { participants: { $size: 1 } },
+    ],
+  });
+};
+
 conversationSchema.statics.createOrGetPrivate = async function(user1Id, user2Id) {
   let conversation = await this.findPrivateConversation(user1Id, user2Id);
   if (!conversation) {
@@ -102,6 +112,21 @@ conversationSchema.statics.createOrGetPrivate = async function(user1Id, user2Id)
       type: 'private',
       participants: [user1Id, user2Id]
     });
+  }
+  return conversation;
+};
+
+conversationSchema.statics.createOrGetPersonal = async function(userId) {
+  let conversation = await this.findPersonalConversation(userId);
+  if (!conversation) {
+    conversation = await this.create({
+      name: 'Cá nhân',
+      type: 'private',
+      participants: [userId],
+    });
+  } else if (!conversation.name) {
+    conversation.name = 'Cá nhân';
+    await conversation.save();
   }
   return conversation;
 };

@@ -36,19 +36,19 @@ export const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email đã được sử dụng' });
     }
 
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-
-    const user = await User.create({
+    const user = new User({
       username,
       email,
       password,
       gender: gender || 'other',
       isVerified: false,
-      verificationToken,
-      verificationExpire: Date.now() + 24 * 60 * 60 * 1000
     });
 
-    const verifyLink = `http://localhost/api/auth/verify/${verificationToken}`;
+    const verificationToken = user.getVerificationToken();
+    await user.save();
+
+    const serverUrl = process.env.SERVER_URL || 'http://localhost';
+    const verifyLink = `${serverUrl}/api/auth/verify/${verificationToken}`;
     await sendVerificationEmail(user.email, verifyLink);
 
     res.status(201).json({
@@ -86,7 +86,10 @@ export const verifyEmail = async (req, res) => {
     user.verificationExpire = undefined;
     await user.save();
 
-    res.redirect(`${process.env.CLIENT_URL}login?verified=true`);
+    const clientUrl = process.env.CLIENT_URL.endsWith('/')
+      ? process.env.CLIENT_URL
+      : `${process.env.CLIENT_URL}/`;
+    res.redirect(`${clientUrl}login?verified=true`);
 
   } catch (error) {
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
@@ -226,7 +229,10 @@ export const forgotPassword = async (req, res) => {
     const resetToken = user.getResetPasswordToken();
     await user.save({ validateBeforeSave: false });
 
-    const resetUrl = `${process.env.CLIENT_URL}reset-password/${resetToken}`;
+    const clientUrl = process.env.CLIENT_URL.endsWith('/')
+      ? process.env.CLIENT_URL
+      : `${process.env.CLIENT_URL}/`;
+    const resetUrl = `${clientUrl}reset-password/${resetToken}`;
     await sendResetPasswordEmail(user.email, resetUrl);
 
     res.status(200).json({

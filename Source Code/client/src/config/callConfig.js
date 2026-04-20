@@ -56,10 +56,6 @@ export const CALL_CONFIG = {
   },
 
   // Group call settings
-  GROUP_CALL: {
-    MAX_PEERS: 20, // Warn if more than this
-    MESH_TOPOLOGY: true, // Use mesh (P2P) instead of SFU
-  },
 
   // Call status
   CALL_STATES: {
@@ -70,14 +66,7 @@ export const CALL_CONFIG = {
     ENDED: 'ended',
   },
 
-  // Member status in group call
-  MEMBER_STATUS: {
-    PENDING: 'pending',
-    JOINED: 'joined',
-    REJECTED: 'rejected',
-    LEFT: 'left',
-    RECONNECTING: 'reconnecting',
-  },
+  // NOTE: group call settings removed — app now uses 1-1 calls only
 };
 
 // Environment-based overrides

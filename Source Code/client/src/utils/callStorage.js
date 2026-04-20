@@ -55,7 +55,6 @@ export const getActiveCallSession = () => {
   return {
     callId: session.callId,
     conversationId: session.conversationId,
-    isGroup: session.isGroup ?? false,
     callType: session.callType ?? 'audio',
     micOn: session.micOn ?? true,
     camOn: session.camOn ?? false,

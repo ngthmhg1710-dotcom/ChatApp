@@ -6,10 +6,11 @@ import {
   Trash2, BellOff, UserX, Flag, Search, Pin, Users,
   Reply, Forward, EyeOff, Edit3, Clock, Quote,
   Paperclip, FileText, ChevronDown, ChevronUp, File, Plus,
-  Download, Copy, Share2, Check, UserPlus,
+  Download, Copy, Share2, Check, UserPlus, Archive, 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import confirmAsync from '../utils/confirmAsync';
 import Sidebar from '../components/Sidebar';
 import CallManager from '../components/CallManager';
 import ChatInfoPanel from '../components/ChatInfoPanel';
@@ -121,6 +122,66 @@ function MessageContent({ content, isOwn }) {
       </ReactMarkdown>
     </div>
   );
+}
+
+  function formatDuration(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+    const s = String(secs % 60).padStart(2, '0');
+    return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+  }
+
+  function ActiveCallBanner({ callType, startedAt, onRejoin }) {
+    const [elapsed, setElapsed] = useState(() =>
+      startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0
+    );
+
+    useEffect(() => {
+      const t = setInterval(() => {
+        setElapsed(startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0);
+      }, 1000);
+      return () => clearInterval(t);
+    }, [startedAt]);
+
+    return (
+      <div className="flex justify-center my-3">
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-4 py-2.5 shadow-sm">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-green-700 leading-tight">{callType === 'video' ? '📹 Đang trong video call' : '📞 Đang trong cuộc gọi'}</p>
+            <p className="text-xs text-green-600 font-mono">{formatDuration(elapsed)}</p>
+          </div>
+          <button
+            onClick={onRejoin}
+            className="ml-2 flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-xl hover:bg-green-700 transition"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            Quay lại
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+function plainTextPreview(input) {
+  if (input == null) return '';
+  let s = String(input);
+  try {
+    // Decode any HTML entities/tags by using a temporary DOM node
+    const div = document.createElement('div');
+    div.innerHTML = s;
+    s = div.textContent || div.innerText || s;
+  } catch (e) {}
+  // Unlink markdown links [text](url) -> text
+  s = s.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
+  // Remove code ticks and other markdown-ish punctuation
+  s = s.replace(/[`*_>#~-]/g, '');
+  // Collapse whitespace and remove control characters
+  s = s.replace(/\s+/g, ' ').replace(/\p{C}/gu, '').trim();
+  return s;
 }
 
 function AppLogo({ size = 20, className = '' }) {
@@ -333,7 +394,7 @@ function Avatar({ username = '', size = 8, onClick, avatarUrl }) {
   return (
     <div
       onClick={onClick}
-      className={`w-${size} h-${size} ${color} rounded-full flex items-center justify-center font-bold text-white text-xs flex-shrink-0 select-none ${
+      className={`${size === 8 ? 'w-8 h-8' : size === 10 ? 'w-10 h-10' : 'w-8 h-8'} ${color} rounded-full flex items-center justify-center font-bold text-white text-xs flex-shrink-0 select-none ${
         onClick ? 'cursor-pointer hover:opacity-80 transition' : ''
       }`}
     >
@@ -421,6 +482,7 @@ function ForwardModal({ msg, onClose, socket }) {
 
   const handleForwardTo = async (friend) => {
     if (sent.has(friend._id) || sending.has(friend._id)) return;
+    if (!socket) return;
     setSending((prev) => new Set([...prev, friend._id]));
 
     try {
@@ -454,16 +516,16 @@ function ForwardModal({ msg, onClose, socket }) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-80 overflow-hidden flex flex-col max-h-[75vh]">
+          <div className={`${(localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark')) ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white'} rounded-3xl shadow-2xl w-80 overflow-hidden flex flex-col max-h-[75vh]`}>
         <div className="px-5 pt-5 pb-3 border-b border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-gray-800 text-base">Chuyển tiếp tin nhắn</h3>
             <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
-              <X className="w-4 h-4" />
+                <X className={`${(localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark')) ? 'text-white' : 'text-gray-400'}`} />
             </button>
           </div>
 
-          <div className="bg-gray-50 rounded-2xl px-3 py-2.5 mb-3 border border-gray-100">
+          <div className={`${(localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark')) ? 'bg-gray-700 rounded-2xl px-3 py-2.5 mb-3 border border-gray-700 text-gray-200' : 'bg-gray-50 rounded-2xl px-3 py-2.5 mb-3 border border-gray-100'}`}>
             {msg.type === 'image' && msg.fileUrl ? (
               <div className="flex items-center gap-2">
                 <img src={getFileUrl(msg.fileUrl)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
@@ -487,7 +549,7 @@ function ForwardModal({ msg, onClose, socket }) {
               value={searchQ}
               onChange={(e) => setSearchQ(e.target.value)}
               placeholder="Tìm bạn bè..."
-              className="w-full pl-8 pr-3 py-2 text-sm bg-gray-100 rounded-xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition"
+                className={`${(localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark')) ? 'w-full pl-8 pr-3 py-2 text-sm bg-gray-700 rounded-xl outline-none focus:bg-gray-700 focus:ring-0 text-white transition' : 'w-full pl-8 pr-3 py-2 text-sm bg-gray-100 rounded-xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition'}`}
             />
           </div>
         </div>
@@ -512,7 +574,7 @@ function ForwardModal({ msg, onClose, socket }) {
                 key={friend._id}
                 onClick={() => handleForwardTo(friend)}
                 disabled={isSent}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition mb-1 ${isSent ? 'bg-green-50' : 'hover:bg-gray-50'}`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition mb-1 ${isSent ? (localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'bg-green-900 text-white' : 'bg-green-50') : (localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'hover:bg-gray-700' : 'hover:bg-gray-50')}`}
               >
                 {friend.avatar ? (
                   <img src={getFileUrl(friend.avatar)} alt={friend.username} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
@@ -523,12 +585,12 @@ function ForwardModal({ msg, onClose, socket }) {
                 )}
 
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{friend.username}</p>
-                  <p className="text-xs text-gray-400 truncate">{friend.email}</p>
+                  <p className={`text-sm font-semibold truncate ${localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'text-white' : 'text-gray-800'}`}>{friend.username}</p>
+                  <p className={`text-xs truncate ${localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'text-gray-300' : 'text-gray-400'}`}>{friend.email}</p>
                 </div>
 
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition ${
-                  isSent ? 'bg-green-500' : isSending ? 'bg-gray-200' : 'bg-blue-600 hover:bg-blue-700'
+                  isSent ? 'bg-green-500' : isSending ? (localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'bg-gray-600' : 'bg-gray-200') : 'bg-blue-600 hover:bg-blue-700'
                 }`}>
                   {isSent ? (
                     <Check className="w-4 h-4 text-white" />
@@ -543,8 +605,8 @@ function ForwardModal({ msg, onClose, socket }) {
           })}
         </div>
 
-        <div className="px-5 py-3 border-t border-gray-100">
-          <button onClick={onClose} className="w-full py-2.5 bg-gray-100 text-gray-600 text-sm font-semibold rounded-2xl hover:bg-gray-200 transition">
+        <div className={`px-5 py-3 border-t ${localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'border-gray-700' : 'border-gray-100'}`}>
+          <button onClick={onClose} className={`${localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'w-full py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-2xl hover:bg-gray-700 transition' : 'w-full py-2.5 bg-gray-100 text-gray-600 text-sm font-semibold rounded-2xl hover:bg-gray-200 transition'}`}>
             {sent.size > 0 ? `Đã gửi đến ${sent.size} người · Đóng` : 'Đóng'}
           </button>
         </div>
@@ -598,7 +660,7 @@ function ShareModal({ msg, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:w-80 overflow-hidden">
+      <div className={`${(localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark')) ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white'} rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:w-80 overflow-hidden`}>
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="font-bold text-gray-800 text-base">Chia sẻ</h3>
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
@@ -607,7 +669,7 @@ function ShareModal({ msg, onClose }) {
         </div>
 
         {navigator.share && (
-          <div className="px-5 py-3 border-b border-gray-100">
+          <div className={`px-5 py-3 border-b ${localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'border-gray-700' : 'border-gray-100'}`}>
             <button onClick={handleNativeShare} className="w-full flex items-center gap-3 py-3 px-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition font-semibold text-sm">
               <Share2 className="w-4 h-4" />
               Chia sẻ qua hệ thống
@@ -624,7 +686,7 @@ function ShareModal({ msg, onClose }) {
                 target="_blank"
                 rel="noreferrer"
                 onClick={onClose}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl hover:bg-gray-50 transition"
+                className={`${(localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark')) ? 'flex flex-col items-center gap-1.5 p-3 rounded-2xl hover:bg-gray-700 transition' : 'flex flex-col items-center gap-1.5 p-3 rounded-2xl hover:bg-gray-50 transition'}`}
               >
                 <div className={`w-12 h-12 ${app.color} rounded-2xl flex items-center justify-center text-2xl shadow-sm`}>
                   {app.icon}
@@ -641,7 +703,7 @@ function ShareModal({ msg, onClose }) {
               navigator.clipboard.writeText(fileUrl || shareText);
               toast.success('Đã sao chép!');
             }}
-            className="w-full flex items-center gap-3 py-3 px-4 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 transition text-sm font-semibold"
+            className={`${localStorage.getItem('theme')==='dark' || document.documentElement.classList.contains('dark') ? 'w-full flex items-center gap-3 py-3 px-4 bg-gray-800 text-white rounded-2xl hover:bg-gray-700 transition text-sm font-semibold' : 'w-full flex items-center gap-3 py-3 px-4 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 transition text-sm font-semibold'}`}
           >
             <Copy className="w-4 h-4" />
             Sao chép {fileUrl ? 'link' : 'nội dung'}
@@ -887,11 +949,18 @@ function MessageBubble({
   onShare,
   isGroup,
   disableActions = false,
+  user,
+  onScrollToMessage,
+  participants = [],
 }) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const moreRef = useRef(null);
+  const moreMenuRef = useRef(null);
+  const [morePlacement, setMorePlacement] = useState('top');
+  const moreCloseTimerRef = useRef(null);
+  const proximityListenerRef = useRef(null);
 
   useEffect(() => {
     if (!showMoreMenu) return;
@@ -900,6 +969,20 @@ function MessageBubble({
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
+  }, [showMoreMenu]);
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    // Measure available space and choose placement to avoid clipping
+    const wrapper = moreRef.current;
+    const menu = moreMenuRef.current;
+    if (!wrapper || !menu) return;
+    const rect = wrapper.getBoundingClientRect();
+    const menuH = menu.offsetHeight || 200;
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceAbove < menuH && spaceBelow >= menuH) setMorePlacement('bottom');
+    else setMorePlacement('top');
   }, [showMoreMenu]);
 
   const editHistory = msg.editHistory || [];
@@ -918,6 +1001,7 @@ function MessageBubble({
     ? Object.fromEntries(msg.reactions)
     : (msg.reactions || {});
   const hasReactions = Object.entries(reactionsObj).some(([, u]) => (u || []).length > 0);
+  const myReactions = Object.entries(reactionsObj).filter(([, users]) => (users || []).some((id) => (id?._id || id)?.toString() === (user?._id?.toString()))).map(([emoji]) => emoji);
 
   const handleDownload = () => {
     if (!msg.fileUrl) return;
@@ -931,9 +1015,13 @@ function MessageBubble({
   };
 
   const handleCopy = () => {
-    const text = isImageType ? getFileUrl(msg.fileUrl || '') : (msg.content || '');
-    navigator.clipboard.writeText(text);
-    toast.success(isImageType ? 'Đã sao chép link ảnh!' : 'Đã sao chép!');
+    try {
+      const text = isImageType ? getFileUrl(msg.fileUrl || '') : (msg.content || '');
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+        toast.success(isImageType ? 'Đã sao chép link ảnh!' : 'Đã sao chép!');
+      }
+    } catch (err) {}
   };
 
   const moreItems = [
@@ -1032,9 +1120,24 @@ function MessageBubble({
           )}
 
           {replyMsg && (
-            <div className={`mb-1 px-3 py-1.5 rounded-xl chat-preview w-full ${mine ? 'bg-blue-800/30 border-l-2 border-blue-300 text-blue-100' : 'bg-gray-200 border-l-2 border-gray-500 text-gray-700'}`}>
-              <p className="font-bold chat-caption mb-0.5 opacity-80">{replyMsg.sender?.username || replyMsg.sender}</p>
-              <p className="truncate opacity-70">{typeof replyMsg === 'object' ? (replyMsg.content || '📎 File') : '...'}</p>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => onScrollToMessage?.(replyMsg._id)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onScrollToMessage?.(replyMsg._id); }}
+              className={`mb-1 px-3 py-1.5 rounded-xl chat-preview w-full cursor-pointer ${mine ? 'bg-blue-800/30 border-l-2 border-blue-300 text-blue-100' : 'bg-gray-200 border-l-2 border-gray-500 text-gray-700'}`}
+            >
+              <p className="font-bold chat-caption mb-0.5 opacity-80">{
+                // Prefer populated sender username, otherwise try to resolve from participants
+                (replyMsg.sender && typeof replyMsg.sender === 'object' && (replyMsg.sender.username || replyMsg.sender.name))
+                || (typeof replyMsg.sender === 'string' && (participants.find(p => (p?._id || p)?.toString() === replyMsg.sender.toString())?.username))
+                || (replyMsg.sender && typeof replyMsg.sender === 'string' ? replyMsg.sender : 'Người dùng')
+              }</p>
+              <p className="truncate opacity-70">{
+                typeof replyMsg === 'object' ? (
+                  (replyMsg.type === 'image' || replyMsg.type === 'file') ? '📎 File' : plainTextPreview(replyMsg.content)
+                ) : '...'
+              }</p>
             </div>
           )}
 
@@ -1101,7 +1204,7 @@ function MessageBubble({
                 {QUICK_REACTIONS.map((r) => (
                   <button
                     key={r}
-                    onClick={() => { onReact(msg._id, r); setShowReactionPicker(false); }}
+                    onClick={() => { onReact(msg._id, r); animateReactionBurst(msg._id, r); }}
                     className="text-xl hover:scale-125 transition-transform w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
                   >
                     {r}
@@ -1115,7 +1218,48 @@ function MessageBubble({
             <Quote className="w-3.5 h-3.5 text-gray-500" />
           </button>
 
-          <div className="relative" ref={moreRef}>
+          <div className="relative" ref={moreRef}
+            onMouseEnter={() => {
+              // cancel pending close
+              if (moreCloseTimerRef.current) { clearTimeout(moreCloseTimerRef.current); moreCloseTimerRef.current = null; }
+              setShowMoreMenu(true);
+            }}
+            onMouseLeave={() => {
+              // start delayed close and add proximity listener to keep open while nearby
+              if (moreCloseTimerRef.current) clearTimeout(moreCloseTimerRef.current);
+              moreCloseTimerRef.current = setTimeout(() => setShowMoreMenu(false), 700);
+              if (proximityListenerRef.current) document.removeEventListener('mousemove', proximityListenerRef.current);
+              const check = (ev) => {
+                try {
+                  const wrapper = moreRef.current;
+                  const menu = moreMenuRef.current;
+                  if (!wrapper) return;
+                  const insideWrapper = wrapper.contains(ev.target);
+                  const insideMenu = menu ? menu.contains(ev.target) : false;
+                  if (insideWrapper || insideMenu) {
+                    // pointer re-entered near menu -> cancel close
+                    if (moreCloseTimerRef.current) { clearTimeout(moreCloseTimerRef.current); moreCloseTimerRef.current = null; }
+                    return;
+                  }
+                  // proximity distance check (px)
+                  const rect = menu ? menu.getBoundingClientRect() : wrapper.getBoundingClientRect();
+                  const cx = rect.left + rect.width / 2;
+                  const cy = rect.top + rect.height / 2;
+                  const dx = ev.clientX - cx;
+                  const dy = ev.clientY - cy;
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+                  if (dist > 220) {
+                    if (moreCloseTimerRef.current) { clearTimeout(moreCloseTimerRef.current); moreCloseTimerRef.current = null; }
+                    setShowMoreMenu(false);
+                    document.removeEventListener('mousemove', proximityListenerRef.current);
+                    proximityListenerRef.current = null;
+                  }
+                } catch (e) { /* ignore */ }
+              };
+              proximityListenerRef.current = check;
+              document.addEventListener('mousemove', check);
+            }}
+          >
             <button
               onClick={() => setShowMoreMenu((v) => !v)}
               className={`w-7 h-7 flex items-center justify-center rounded-full transition ${
@@ -1126,7 +1270,10 @@ function MessageBubble({
             </button>
 
             {showMoreMenu && (
-              <div className={`absolute ${mine ? 'right-0' : 'left-0'} bottom-full mb-1 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 z-20 py-1 overflow-hidden`}>
+              <div
+                ref={moreMenuRef}
+                className={`absolute ${mine ? 'right-0' : 'left-0'} ${morePlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} w-48 bg-white rounded-2xl shadow-xl border border-gray-100 z-20 py-1 overflow-hidden`}
+              >
                 {moreItems.map(({ icon: Icon, label, action, danger }) => (
                   <button
                     key={label}
@@ -1168,12 +1315,12 @@ export default function Chat() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [markdownPreviewEnabled, setMarkdownPreviewEnabled] = useState(() => localStorage.getItem('markdownPreview') !== 'false');
   const [emojiTab, setEmojiTab] = useState(Object.keys(EMOJI_CATEGORIES)[0]);
   const [showMenu, setShowMenu] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMsg, setEditingMsg] = useState(null);
-  const [editInput, setEditInput] = useState('');
   const [pinNotifications, setPinNotifications] = useState([]);
   const [forwardMsg, setForwardMsg] = useState(null);
   const [shareMsg, setShareMsg] = useState(null);
@@ -1207,12 +1354,56 @@ export default function Chat() {
     setActiveCall(callInfo.isActive ? callInfo : null);
   }, []);
 
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [showSidebar, setShowSidebar] = useState(() => {
+    const saved = localStorage.getItem('sidebar_visible');
+    const isMobileView = window.innerWidth < 768;
+    
+    if (isMobileView) {
+      // Trên mobile: Nếu chưa có preference (vừa login/vào lần đầu), mặc định hiện Sidebar
+      return saved !== null ? saved === 'true' : true;
+    }
+    // Desktop luôn hiện sidebar
+    return true;
+  });
+
+  useEffect(() => {
+    // Tự động hiện Sidebar trên mobile nếu không có cuộc trò chuyện nào được chọn
+    if (isMobile && !activeConversation && !showSidebar) {
+      setShowSidebar(true);
+    }
+
+    if (isMobile) {
+    localStorage.setItem('sidebar_visible', showSidebar);
+  }
+}, [showSidebar, isMobile, activeConversation]);
+
+  useEffect(() => {
+    const handler = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setShowSidebar(true);
+        localStorage.setItem('sidebar_visible', 'true');
+      } else {
+        // Khi chuyển từ desktop sang mobile, giữ nguyên trạng thái đã lưu
+        const saved = localStorage.getItem('sidebar_visible');
+        if (saved !== null) {
+          setShowSidebar(saved === 'true');
+        }
+      }
+    };
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
   const suggestRef = useRef(null);
   const msgSearchTimer = useRef(null);
   const startCallRef = useRef(null);
   const fileInputRef = useRef(null);
   const attachInputRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const prevMessagesRef = useRef([]);
   const typingTimer = useRef(null);
   const inputRef = useRef(null);
   const activeConvRef = useRef(null);
@@ -1221,6 +1412,7 @@ export default function Chat() {
   const emojiPanelRef = useRef(null);
   const infoPanelShellRef = useRef(null);
   const infoPanelToggleRef = useRef(null);
+  const rejoinCallRef = useRef(null);
   const restoredConversationReadRef = useRef({ conversationId: '', restoredAt: 0 });
   const lastMarkedReadRef = useRef('');
 
@@ -1229,9 +1421,21 @@ export default function Chat() {
     setMuteMap((prev) => {
       const next = { ...prev, [convId]: val };
       localStorage.setItem('chat_mute_map', JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('chat-mute-map-updated', { detail: next }));
       return next;
     });
   };
+
+  // Ngăn người dùng vô tình load lại trang khi đang trong cuộc gọi
+  useEffect(() => {
+    if (!activeCall?.isActive) return;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = ''; 
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [activeCall]);
 
   useEffect(() => {
     if (!showInfoPanel) return;
@@ -1275,9 +1479,19 @@ export default function Chat() {
   }, [showEmoji]);
 
   const isGroupConv = (conv) => !!(conv?.isGroup || conv?.type === 'group' || conv?.type === 'community');
+  // whether the active conversation is a group
+  const isGroup = isGroupConv(activeConversation);
+  const isSelfConversation = (conv) => {
+    if (!conv || isGroupConv(conv) || !user?._id) return false;
+    const participants = conv.participants || [];
+    if (participants.length !== 1) return false;
+    const onlyParticipant = participants[0]?._id || participants[0];
+    return String(onlyParticipant) === String(user._id);
+  };
 
   const getOtherUser = (conv) => {
     if (!conv) return null;
+    if (isSelfConversation(conv)) return null;
     if (isGroupConv(conv)) {
       const currentId = user?._id ? String(user._id) : '';
 
@@ -1323,11 +1537,13 @@ export default function Chat() {
     return { _id: other, username: 'Người dùng' };
   };
 
+  const isPersonalConversation = isSelfConversation(activeConversation);
   const otherUser = getOtherUser(activeConversation);
+  const displayUser = isPersonalConversation ? user : otherUser;
 
   useEffect(() => {
-    if (!otherUser?._id || isGroupConv(activeConversation)) {
-      setBlockStatus({ iBlockedThem: false, theyBlockedMe: false, isFriend: false });
+    if (isPersonalConversation || !otherUser?._id || isGroupConv(activeConversation)) {
+      setBlockStatus({ iBlockedThem: false, theyBlockedMe: false, isFriend: !!isPersonalConversation });
       setFriendReqStatus('none');
       setPendingRequestId(null);
       return;
@@ -1341,7 +1557,7 @@ export default function Chat() {
         setPendingRequestId(s.requestId || null);
       })
       .catch(() => {});
-  }, [otherUser?._id, activeConversation?._id]);
+  }, [isPersonalConversation, otherUser?._id, activeConversation?._id]);
 
   useEffect(() => {
     if (_conversationRestored || !socket) return;
@@ -1369,8 +1585,10 @@ export default function Chat() {
   }, [socket]);
 
   const handleStartCallReady = useCallback((fn) => {
-    startCallRef.current = fn;
-  }, []);
+    // Only expose call starter when the active conversation is NOT a group
+    if (!isGroup) startCallRef.current = fn;
+    else startCallRef.current = null;
+  }, [isGroup]);
 
   const handleCallEnd = useCallback(({
     type = 'audio',
@@ -1444,7 +1662,30 @@ export default function Chat() {
   }, [activeConversation?._id]);
 
   useEffect(() => {
-    if (!activeConversation) return;
+    // load personal storage when opening personal conversation
+    const fetchPersonalStorage = async () => {
+      if (!isPersonalConversation) {
+        setPersonalStorageItems([]);
+        return;
+      }
+      try {
+        const { data } = await axios.get(`${API_URL}/personal-storage`);
+        setPersonalStorageItems(data.data || []);
+      } catch (err) {
+        console.error('fetch personal storage err', err);
+        setPersonalStorageItems([]);
+      }
+    };
+
+    fetchPersonalStorage();
+    const _psHandler = () => fetchPersonalStorage();
+    window.addEventListener('personal-storage-changed', _psHandler);
+
+    if (!activeConversation) {
+      window.removeEventListener('personal-storage-changed', _psHandler);
+      return;
+    }
+
     setPinnedMessages(activeConversation.pinnedMessages || []);
     setPinNotifications([]);
 
@@ -1468,6 +1709,7 @@ export default function Chat() {
     }
 
     return () => {
+      window.removeEventListener('personal-storage-changed', _psHandler);
       if (socket) socket.emit('leave_conversation', { conversationId: activeConversation._id });
     };
   }, [activeConversation, socket, user?._id]);
@@ -1550,16 +1792,30 @@ export default function Chat() {
       });
     };
 
-    const onOnline = ({ userId }) => setOnlineUsers((prev) => new Set([...prev, String(userId)]));
-    const onOffline = ({ userId }) => {
+    const onOnline = ({ userId }) => {
       setOnlineUsers((prev) => {
         const n = new Set(prev);
-        n.delete(String(userId));
+        n.add(String(userId));
+        // notify other components in-tab
+        try { window.dispatchEvent(new CustomEvent('presence-updated', { detail: { online: Array.from(n) } })); } catch (e) {}
         return n;
       });
     };
 
-    const onOnlineList = (ids) => setOnlineUsers(new Set(ids.map(String)));
+    const onOffline = ({ userId }) => {
+      setOnlineUsers((prev) => {
+        const n = new Set(prev);
+        n.delete(String(userId));
+        try { window.dispatchEvent(new CustomEvent('presence-updated', { detail: { online: Array.from(n) } })); } catch (e) {}
+        return n;
+      });
+    };
+
+    const onOnlineList = (ids) => {
+      const s = new Set(ids.map(String));
+      try { window.dispatchEvent(new CustomEvent('presence-updated', { detail: { online: Array.from(s) } })); } catch (e) {}
+      setOnlineUsers(s);
+    };
 
     const onPinUpdated = ({ conversationId, isPinning, pinnedMessages: newPins, pinnedBy }) => {
       if (conversationId !== activeConvRef.current?._id) return;
@@ -1802,13 +2058,27 @@ export default function Chat() {
   }, [socket, user?._id, otherUser?._id]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, typingUsers, pinNotifications]);
+    // Only auto-scroll when new messages are appended (avoid jumping on reaction/metadata updates)
+    const prev = prevMessagesRef.current || [];
+    if (messages.length > prev.length) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevMessagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (!activeConversation?._id || !messages.length) return;
     markConversationAsRead(activeConversation._id, messages);
   }, [activeConversation?._id, messages, markConversationAsRead]);
+
+    // Tự động focus vào input khi chọn conversation
+  useEffect(() => {
+    if (activeConversation) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [activeConversation]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1839,7 +2109,7 @@ export default function Chat() {
   };
 
   const handleSendMessage = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setShowEmoji(false);
 
     if (blockStatus.theyBlockedMe || blockStatus.iBlockedThem) return;
@@ -1861,8 +2131,6 @@ export default function Chat() {
       return;
     }
 
-    if (hasFiles)  { await handleSendFiles();  return; }
-    if (hasImages) { await handleSendImages(); return; }
     const content = replaceEmojiShortcodes(inputMessage.trim());
     setInputMessage('');
     const currentReply = replyingTo;
@@ -1951,25 +2219,36 @@ export default function Chat() {
     setReplyingTo(null);
 
     try {
+      const attachReplyToFiles = caption === '' ? replyTo : undefined;
+
       for (let i = 0; i < snapshots.length; i++) {
         setUploadProgress(Math.round((i / snapshots.length) * 100));
         const formData = new FormData();
         formData.append('file', snapshots[i].file);
 
         const { data } = await axios.post(`${API_URL}/messages/upload`, formData);
-        const isLast = i === snapshots.length - 1;
 
         socket.emit('send_message', {
           conversationId: activeConversation._id,
-          content: isLast ? caption : '',
+          content: '',
           type: 'image',
           fileUrl: data.data.fileUrl,
           fileName: data.data.fileName,
           fileSize: data.data.fileSize,
-          replyTo: i === 0 ? replyTo : undefined,
+          replyTo: i === 0 ? attachReplyToFiles : undefined,
         });
 
         URL.revokeObjectURL(snapshots[i].url);
+      }
+
+      // send caption as a separate text message after all images
+      if (caption) {
+        socket.emit('send_message', {
+          conversationId: activeConversation._id,
+          content: caption,
+          type: 'text',
+          replyTo: replyTo || undefined,
+        });
       }
     } catch {
       toast.error('Có ảnh không thể gửi được');
@@ -1983,13 +2262,17 @@ export default function Chat() {
     if (!filePreviews.length) return;
     setUploading(true);
 
+    const caption = inputMessage.trim();
     const replyTo = replyingTo?._id;
     const snapshots = [...filePreviews];
 
     setFilePreviews([]);
+    setInputMessage('');
     setReplyingTo(null);
 
     try {
+      const attachReplyToFiles = caption === '' ? replyTo : undefined;
+
       for (let i = 0; i < snapshots.length; i++) {
         setUploadProgress(Math.round((i / snapshots.length) * 100));
         const formData = new FormData();
@@ -2004,11 +2287,21 @@ export default function Chat() {
           fileUrl: data.data.fileUrl,
           fileName: data.data.fileName || snapshots[i].file.name,
           fileSize: data.data.fileSize || snapshots[i].file.size,
-          replyTo: i === 0 ? replyTo : undefined,
+          replyTo: i === 0 ? attachReplyToFiles : undefined,
+        });
+      }
+
+      // send caption as a separate text message after all files
+      if (caption) {
+        socket.emit('send_message', {
+          conversationId: activeConversation._id,
+          content: caption,
+          type: 'text',
+          replyTo: replyTo || undefined,
         });
       }
     } catch {
-      toast.error('Có file không thể gửi được');
+      toast.error('Không thể gửi file');
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -2110,16 +2403,52 @@ function replaceEmojiShortcodes(text) {
       }
     }
 
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Xử lý Enter dựa trên cài đặt
+    if (e.key === 'Enter') {
+      // Nếu đang chỉnh sửa tin nhắn
+      if (editingMsg) {
+        if (!e.shiftKey) {
+          e.preventDefault();
+          submitEdit();
+        }
+        return;
+      }
+
+      // Chế độ Enter để gửi
+      if (enterToSend) {
+        if (!e.shiftKey) {
+          // Enter không shift: gửi tin nhắn
+          e.preventDefault();
+          handleSendMessage(e);
+        }
+        // Shift+Enter: xuống dòng (textarea tự xử lý)
+      } else {
+        if (e.shiftKey || e.ctrlKey) {
+          // Shift+Enter hoặc Ctrl+Enter: gửi tin nhắn
+          e.preventDefault();
+          handleSendMessage(e);
+        }
+      }
+    }
+
+    // Ctrl+F để tìm kiếm
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
       e.preventDefault();
-      handleSendMessage(e);
+      setShowMsgSearch(true);
+      setTimeout(() => {
+        const searchInput = document.querySelector('input[placeholder*="Tìm kiếm tin nhắn"]');
+        searchInput?.focus();
+      }, 100);
     }
 
     if (e.key === 'Escape') {
       setShowEmoji(false);
       setShowMenu(false);
       setReplyingTo(null);
-      setEditingMsg(null);
+      if (editingMsg) {
+        setEditingMsg(null);
+        setInputMessage('');
+      }
       setShowAttachMenu(false);
       setShowInfoPanel(false);
       setShowMsgSearch(false);
@@ -2199,24 +2528,82 @@ function replaceEmojiShortcodes(text) {
     }));
   };
 
+  // Local visual burst of emojis for repeated reaction clicks
+  const animateReactionBurst = (messageId, emoji) => {
+    try {
+      const container = document.getElementById(`msg-${messageId}`);
+      if (!container) return;
+      for (let i = 0; i < 6; i++) {
+        const el = document.createElement('div');
+        el.textContent = emoji;
+        el.style.position = 'absolute';
+        el.style.pointerEvents = 'none';
+        el.style.fontSize = `${12 + Math.random() * 12}px`;
+        el.style.opacity = '0.95';
+        el.style.left = `${50 + Math.random() * 40}%`;
+        el.style.bottom = '8px';
+        el.style.transform = `translateX(-50%)`;
+        container.style.position = container.style.position || 'relative';
+        container.appendChild(el);
+        const dx = (Math.random() - 0.5) * 60;
+        const dy = 60 + Math.random() * 80;
+        el.animate([
+          { transform: `translate(${dx}px, 0px) scale(1)`, opacity: 1 },
+          { transform: `translate(${dx}px, -${dy}px) scale(1.4)`, opacity: 0 },
+        ], { duration: 800 + Math.random() * 400, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        setTimeout(() => { try { el.remove(); } catch (e) {} }, 1400);
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const handleReply = (msg) => {
     setReplyingTo(msg);
     setEditingMsg(null);
     inputRef.current?.focus();
   };
 
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'markdownPreview') {
+        setMarkdownPreviewEnabled(e.newValue !== 'false');
+      }
+      if (e.key === 'enterToSend') {
+        setEnterToSend(e.newValue !== 'false');
+      }
+    };
+    
+    const onCustomEvent = (e) => {
+      if (e.detail?.enterToSend !== undefined) {
+        setEnterToSend(e.detail.enterToSend);
+      }
+    };
+    
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('enter-to-send-changed', onCustomEvent);
+    
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('enter-to-send-changed', onCustomEvent);
+    };
+  }, []);
+
   const handleEdit = (msg) => {
     setEditingMsg(msg);
-    setEditInput(msg.content);
+    setInputMessage(msg.content || '');
     setReplyingTo(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const submitEdit = () => {
-    if (!editInput.trim() || !editingMsg || !socket) return;
+    if (!inputMessage.trim() || !editingMsg || !socket) return;
+
+    const newContent = inputMessage.trim();
 
     socket.emit('edit_message', {
       messageId: editingMsg._id,
-      content: editInput.trim(),
+      content: newContent,
       conversationId: activeConversation._id,
     });
 
@@ -2224,7 +2611,7 @@ function replaceEmojiShortcodes(text) {
       m._id === editingMsg._id
         ? {
             ...m,
-            content: editInput.trim(),
+            content: newContent,
             isEdited: true,
             editHistory: [...(m.editHistory || []), {
               content: m.content,
@@ -2235,11 +2622,12 @@ function replaceEmojiShortcodes(text) {
     )));
 
     setEditingMsg(null);
-    setEditInput('');
+    setInputMessage('');
   };
 
-  const handleDelete = (messageId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa tin nhắn này?')) return;
+  const handleDelete = async (messageId) => {
+    const ok = await confirmAsync({ title: 'Xóa tin nhắn', message: 'Bạn có chắc muốn xóa tin nhắn này?' });
+    if (!ok) return;
     socket?.emit('delete_message', { messageId, conversationId: activeConversation._id });
     setMessages((prev) => prev.filter((m) => m._id !== messageId));
     setPinnedMessages((prev) => prev.filter((p) => p._id !== messageId));
@@ -2416,8 +2804,22 @@ function replaceEmojiShortcodes(text) {
     };
   });
 
-  const isOtherOnline = otherUser?._id ? onlineUsers.has(String(otherUser._id)) : false;
+  const isOtherOnline = !isPersonalConversation && otherUser?._id
+    ? onlineUsers.has(String(otherUser._id))
+    : false;
+  // Personal storage items (loaded from localStorage)
+  const [personalStorageItems, setPersonalStorageItems] = useState([]);
+  const [showStorageViewModal, setShowStorageViewModal] = useState(false);
+  const [viewingStorage, setViewingStorage] = useState(null);
   const remaining = MAX_LENGTH - inputMessage.length;
+
+  const [enterToSend, setEnterToSend] = useState(() => {
+  try {
+    return localStorage.getItem('enterToSend') !== 'false';
+  } catch {
+    return true;
+  }
+});
 
   const buildChatItems = () => {
     const items = [];
@@ -2452,7 +2854,6 @@ function replaceEmojiShortcodes(text) {
       /📞|📹/.test(msg.content || '')
     );
 
-  const isGroup = isGroupConv(activeConversation);
   const isCurrentUserActiveGroupMember = isGroup && activeConversation?.participants?.some(
     (p) => String(p?._id || p) === String(user?._id)
   );
@@ -2470,7 +2871,13 @@ function replaceEmojiShortcodes(text) {
     ? activeTypingUsers.length > 1
       ? `${primaryTypingUser?.username || 'Ai đó'} và ${activeTypingUsers.length - 1} người khác đang nhập...`
       : `${primaryTypingUser?.username || 'Ai đó'} đang nhập...`
-    : `${otherUser?.username || 'Ai đó'} đang nhập...`;
+    : `${displayUser?.username || 'Ai đó'} đang nhập...`;
+  const canOpenInfoPanel = isGroup || (!isPersonalConversation && !!otherUser);
+  const directChatTitle = isPersonalConversation
+    ? 'Cá nhân'
+    : blockStatus.theyBlockedMe
+    ? 'Người dùng'
+    : (otherUser?.username || '?');
 
   const renderInputArea = () => (
     <div className="bg-white border-t border-gray-200 px-4 py-3 flex-shrink-0">
@@ -2479,11 +2886,11 @@ function replaceEmojiShortcodes(text) {
           <p className="text-sm">
             {isGroupReadOnly
               ? isGroupDissolved
-                ? '🚫 Nhóm đã giải tán. Bạn chỉ có thể xem lịch sử chat'
-                : '🚫 Bạn không còn là thành viên nhóm này'
+                ? ' Nhóm đã giải tán'
+                : ' Bạn không còn là thành viên nhóm này'
               : blockStatus.theyBlockedMe
-              ? '🚫 Bạn không thể nhắn tin với người dùng này'
-              : '🚫 Bỏ chặn để tiếp tục nhắn tin'}
+              ? ' Bạn không thể nhắn tin với người dùng này'
+              : ' Bỏ chặn để tiếp tục nhắn tin'}
           </p>
         </div>
       ) : (
@@ -2603,29 +3010,46 @@ function replaceEmojiShortcodes(text) {
             <input ref={attachInputRef} type="file" multiple onChange={handleFileSelect} className="hidden" />
 
             <div className="flex-1 relative">
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
                 value={inputMessage}
                 onChange={handleTypingInput}
                 onKeyDown={handleKeyDown}
                 maxLength={MAX_LENGTH}
+                rows={1}
                 placeholder={
                   replyingTo
                     ? `Trả lời ${replyingTo.sender?.username}...`
                     : imagePreviews.length
                     ? 'Thêm chú thích...'
                     : filePreviews.length
-                    ? 'Chuẩn bị gửi file...'
+                    ? 'Gửi file...'
+                    : isPersonalConversation
+                    ? 'Ghi chú...'
                     : 'Nhập tin nhắn...'
                 }
-                className="w-full px-4 py-2.5 rounded-xl bg-gray-100 border border-transparent focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none chat-input transition"
-                style={{ paddingRight: remaining <= 100 ? '3rem' : undefined }}
+                className="w-full px-4 py-2.5 rounded-xl bg-gray-100 border border-transparent focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none chat-input transition resize-none"
+                style={{ 
+                  paddingRight: remaining <= 100 ? '3rem' : undefined,
+                  minHeight: '44px',
+                  maxHeight: '120px'
+                }}
+                onInput={(e) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                }}
               />
               {remaining <= 100 && (
                 <span className={`absolute right-3 top-1/2 -translate-y-1/2 chat-meta font-medium ${remaining <= 20 ? 'text-red-500' : 'text-gray-400'}`}>
                   {remaining}
                 </span>
+              )}
+              {markdownPreviewEnabled && inputMessage.trim() !== '' && (
+                <div className="absolute left-0 -bottom-20 w-full bg-white border border-gray-100 rounded-xl p-3 shadow-sm prose prose-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {inputMessage}
+                  </ReactMarkdown>
+                </div>
               )}
             </div>
 
@@ -2643,7 +3067,8 @@ function replaceEmojiShortcodes(text) {
             </button>
 
             <button
-              type="submit"
+              type="button"
+              onClick={() => { if (editingMsg) submitEdit(); else handleSendMessage(); }}
               disabled={(!inputMessage.trim() && !imagePreviews.length && !filePreviews.length) || uploading}
               className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
             >
@@ -2661,40 +3086,55 @@ function replaceEmojiShortcodes(text) {
 
   return (
     <div className="h-screen flex bg-gray-100 overflow-hidden">
-      <Sidebar
-        onSelectConversation={(conv) => {
-          if (conv._id === activeConversation?._id) return;
-          restoredConversationReadRef.current = { conversationId: '', restoredAt: 0 };
-          lastMarkedReadRef.current = '';
-          setActiveConversation(conv);
-          setMessages([]);
-          setShowMenu(false);
-          setShowInfoPanel(false);
-          setShowMsgSearch(false);
-          setMsgSearchQuery('');
-          setMsgSearchResults([]);
-          setFriendReqStatus('none');
-          setPendingRequestId(null);
-          setReplyingTo(null);
-          setEditingMsg(null);
-          setPinnedMessages(conv.pinnedMessages || []);
-          setPinNotifications([]);
-          setImagePreviews([]);
-          setFilePreviews([]);
-          localStorage.setItem('activeConversationId', conv._id);
-        }}
-        activeConversationId={activeConversation?._id}
-        socket={socket}
-        activeCall={activeCall}
-        currentUser={user}
-      />
+      {(showSidebar) && (
+        <div className={`${isMobile ? 'fixed inset-0 z-40 w-full h-full' : 'relative'} flex-shrink-0`}>
+          <Sidebar
+            onSelectConversation={(conv) => {
+              if (isMobile) setShowSidebar(false);
+              if (conv._id === activeConversation?._id) return;
+              restoredConversationReadRef.current = { conversationId: '', restoredAt: 0 };
+              lastMarkedReadRef.current = '';
+              setActiveConversation(conv);
+              setMessages([]);
+              setShowMenu(false);
+              setShowInfoPanel(false);
+              setShowMsgSearch(false);
+              setMsgSearchQuery('');
+              setMsgSearchResults([]);
+              setFriendReqStatus('none');
+              setPendingRequestId(null);
+              setReplyingTo(null);
+              setEditingMsg(null);
+              setPinnedMessages(conv.pinnedMessages || []);
+              setPinNotifications([]);
+              setImagePreviews([]);
+              setFilePreviews([]);
+              localStorage.setItem('activeConversationId', conv._id);
+            }}
+            activeConversationId={activeConversation?._id}
+            socket={socket}
+            activeCall={activeCall}
+            currentUser={user}
+          />
+        </div>
+      )}
 
-      <div className="flex-1 flex min-w-0 overflow-hidden pr-3 py-3 gap-3">
-          <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+        <div className={`flex-1 flex min-w-0 overflow-hidden ${isMobile ? 'p-0' : 'pr-3 py-3 gap-3'} ${isMobile && showSidebar ? 'hidden' : ''}`}>        <div className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-gray-800 ${isMobile ? '' : 'rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50'} overflow-hidden`}>
           {activeConversation ? (
             <>
               <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm flex-shrink-0">
                 <div className="flex items-center gap-3">
+                  {/* Nút back — chỉ hiện trên mobile */}
+                  {isMobile && (
+                    <button
+                      onClick={() => setShowSidebar(true)}
+                      className="p-2 -ml-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition flex-shrink-0"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                  )}
                   {isGroup ? (
                     <GroupAvatar
                       participants={activeConversation.participants || []}
@@ -2704,21 +3144,19 @@ function replaceEmojiShortcodes(text) {
                   ) : (
                     <div className="relative">
                       <Avatar
-                        username={blockStatus.theyBlockedMe ? 'Người dùng' : (otherUser?.username || '?')}
+                        username={directChatTitle}
                         size={10}
-                        avatarUrl={blockStatus.theyBlockedMe ? null : otherUser?.avatar}
+                        avatarUrl={blockStatus.theyBlockedMe ? null : displayUser?.avatar}
                       />
-                      <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${isOtherOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                      {!isPersonalConversation && (
+                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${isOtherOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                      )}
                     </div>
                   )}
 
                   <div>
                       <p className="chat-username text-gray-800">
-                      {isGroup
-                        ? (activeConversation.name || 'Nhóm')
-                        : blockStatus.theyBlockedMe
-                        ? 'Người dùng'
-                        : (otherUser?.username || '?')}
+                      {isGroup ? (activeConversation.name || 'Nhóm') : directChatTitle}
                     </p>
 
                     {isGroup ? (
@@ -2730,11 +3168,13 @@ function replaceEmojiShortcodes(text) {
                           : 'text-gray-400'
                       }`}>
                         {isGroupDissolved
-                          ? '🚫 Nhóm đã giải tán'
+                          ? ' Nhóm đã giải tán'
                           : isGroupReadOnly
-                          ? '👁️ Chỉ xem lịch sử'
+                          ? 'Đã rời nhóm'
                           : `👥 ${activeConversation.participants?.length || 0} thành viên`}
                       </p>
+                    ) : isPersonalConversation ? (
+                      <p className="chat-caption text-blue-600">Lưu trữ riêng tư của bạn</p>
                     ) : blockStatus.theyBlockedMe ? (
                       <p className="chat-caption text-gray-400">Tài khoản bị hạn chế</p>
                     ) : blockStatus.iBlockedThem ? (
@@ -2750,7 +3190,7 @@ function replaceEmojiShortcodes(text) {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {!blockStatus.theyBlockedMe && !blockStatus.iBlockedThem && !isGroupReadOnly && !isGroupDissolved && (
+                  {!isGroup && !isPersonalConversation && !blockStatus.theyBlockedMe && !blockStatus.iBlockedThem && !isGroupReadOnly && !isGroupDissolved && (
                     <>
                       <button
                         onClick={() => startCallRef.current?.('audio')}
@@ -2783,16 +3223,18 @@ function replaceEmojiShortcodes(text) {
                     <Search className="w-5 h-5" />
                   </button>
 
-                  <button
-                    ref={infoPanelToggleRef}
-                    type="button"
-                    onClick={() => setShowInfoPanel((v) => !v)}
-                    className={`p-2 rounded-xl transition ${
-                      showInfoPanel ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
+                  {canOpenInfoPanel && (
+                    <button
+                      ref={infoPanelToggleRef}
+                      type="button"
+                      onClick={() => setShowInfoPanel((v) => !v)}
+                      className={`p-2 rounded-xl transition ${
+                        showInfoPanel ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
               </header>
 
@@ -2852,13 +3294,13 @@ function replaceEmojiShortcodes(text) {
                     isGroupDissolved ? 'text-red-600' : 'text-amber-700'
                   }`}>
                     {isGroupDissolved
-                      ? '🚫 Nhóm này đã giải tán. Bạn chỉ có thể xem lại lịch sử chat.'
-                      : '🚫 Bạn không còn là thành viên của nhóm này. Chỉ có thể xem lại lịch sử chat.'}
+                      ? ' Nhóm đã giải tán.'
+                      : ' Bạn không còn là thành viên của nhóm này.'}
                   </p>
                 </div>
               )}
 
-              {!isGroup && !blockStatus.isFriend && !blockStatus.theyBlockedMe && !blockStatus.iBlockedThem && otherUser?._id && (
+              {!isPersonalConversation && !isGroup && !blockStatus.isFriend && !blockStatus.theyBlockedMe && !blockStatus.iBlockedThem && otherUser?._id && (
                 <div className="bg-amber-50 border-b border-amber-100 px-4 py-2.5 flex items-center justify-between flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <span className="text-amber-500">👤</span>
@@ -2917,7 +3359,7 @@ function replaceEmojiShortcodes(text) {
                 </div>
               )}
 
-              {blockStatus.iBlockedThem && !isGroup && (
+              {blockStatus.iBlockedThem && !isPersonalConversation && !isGroup && (
                 <div className="bg-red-50 border-b border-red-100 px-4 py-2.5 flex items-center justify-between flex-shrink-0">
                   <p className="chat-text text-red-600 font-medium">🚫 Bạn đã chặn người dùng này</p>
                   <button onClick={async () => {
@@ -2934,10 +3376,15 @@ function replaceEmojiShortcodes(text) {
                 </div>
               )}
 
-              <div
-                className="flex-1 overflow-y-auto px-4 py-4"
-                onClick={() => activeConversation?._id && unlockRestoredConversationRead(activeConversation._id, messages)}
-              >
+                <div
+                  className="flex-1 overflow-y-auto px-4 py-4 chat-container"
+                  onClick={(e) => {
+                    activeConversation?._id && unlockRestoredConversationRead(activeConversation._id, messages);
+                    if (!e.target.closest('button') && !e.target.closest('[role="button"]') && !e.target.closest('.more-menu')) {
+                      inputRef.current?.focus();
+                    }
+                  }}
+                >
                 {loadingMessages ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -2952,12 +3399,15 @@ function replaceEmojiShortcodes(text) {
                       <p className="chat-preview mt-1">
                         {isGroup
                           ? `Gửi tin nhắn đầu tiên trong nhóm ${activeConversation.name}`
+                          : isPersonalConversation
+                          ? 'Gửi tin nhắn đầu tiên'
                           : `Gửi tin nhắn đầu tiên cho ${blockStatus.theyBlockedMe ? 'người dùng' : otherUser?.username}`}
                       </p>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-0.5">
+          
                     {buildChatItems().map((item) => {
                       if (item.type === 'pin_notif') {
                         return <PinNotification key={`pin-${item.data.id}`} notification={item.data} />;
@@ -2971,7 +3421,7 @@ function replaceEmojiShortcodes(text) {
                             key={msg._id}
                             msg={msg}
                             mine={isMyMsg(msg)}
-                            onCallback={(callType) => startCallRef.current?.(callType)}
+                            onCallback={(callType) => { if (!isGroup) startCallRef.current?.(callType); }}
                           />
                         );
                       }
@@ -3018,6 +3468,9 @@ function replaceEmojiShortcodes(text) {
                               isPinned={pinnedIds.has(msg._id)}
                               isGroup={isGroup}
                               onReact={handleReact}
+                              onScrollToMessage={handleScrollToPin}
+                              user={user}
+                              participants={activeConversation?.participants || []}
                               onReply={handleReply}
                               onEdit={handleEdit}
                               onDelete={handleDelete}
@@ -3046,9 +3499,9 @@ function replaceEmojiShortcodes(text) {
                         />
                       ) : (
                         <Avatar
-                          username={otherUser?.username || '?'}
+                          username={displayUser?.username || '?'}
                           size={8}
-                          avatarUrl={blockStatus.theyBlockedMe ? null : otherUser?.avatar}
+                          avatarUrl={blockStatus.theyBlockedMe ? null : displayUser?.avatar}
                         />
                       )}
                     </div>
@@ -3070,6 +3523,14 @@ function replaceEmojiShortcodes(text) {
                   </div>
                 )}
 
+                {activeCall?.isActive && activeConversation && (
+                  <ActiveCallBanner
+                    callType={activeCall.callType}
+                    startedAt={activeCall.startedAt}
+                    onRejoin={() => rejoinCallRef.current?.()}
+                  />
+                )}
+
                 <div ref={messagesEndRef} />
               </div>
 
@@ -3078,14 +3539,10 @@ function replaceEmojiShortcodes(text) {
                   <Edit3 className="w-4 h-4 text-yellow-600 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="chat-caption text-yellow-700 font-semibold mb-1">Chỉnh sửa tin nhắn</p>
-                    <input value={editInput} onChange={e => setEditInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') submitEdit(); if (e.key === 'Escape') setEditingMsg(null); }}
-                      className="w-full chat-input bg-white border border-yellow-300 rounded-lg px-3 py-1.5 outline-none focus:border-yellow-500" autoFocus />
+                    <p className="text-sm text-yellow-800 truncate">{plainTextPreview(editingMsg.content)}</p>
+                    <p className="chat-caption text-yellow-600 text-xs mt-1">Chỉnh sửa tin nhắn</p>
                   </div>
-                  <button onClick={submitEdit} className="px-3 py-1.5 bg-yellow-500 text-white text-xs font-semibold rounded-lg hover:bg-yellow-600 transition flex-shrink-0">
-                    Lưu
-                  </button>
-                  <button onClick={() => setEditingMsg(null)} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                  <button onClick={() => { setEditingMsg(null); setInputMessage(''); }} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -3172,7 +3629,8 @@ function replaceEmojiShortcodes(text) {
               {renderInputArea()}
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 select-none">
+            (!isMobile || !showSidebar) && (
+              <div className="flex-1 flex flex-col items-center justify-center text-gray-400 select-none">
               <div className="mb-4 flex justify-center">
                 <AppLogo size={64} />
               </div>
@@ -3184,11 +3642,33 @@ function replaceEmojiShortcodes(text) {
                   {isConnected ? 'Đã kết nối' : 'Mất kết nối'}
                 </span>
               </div>
-            </div>
+              </div>
+            )
           )}
         </div>
 
-        {showInfoPanel && activeConversation && (
+        {showStorageViewModal && viewingStorage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => { setShowStorageViewModal(false); setViewingStorage(null); }} />
+            <div className="relative max-w-xl w-full bg-white rounded-2xl shadow-lg p-4 z-10">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold text-lg">{viewingStorage.title}</h3>
+                  <p className="text-sm text-gray-500">{new Date(viewingStorage.createdAt).toLocaleString()}</p>
+                </div>
+                <button onClick={() => { setShowStorageViewModal(false); setViewingStorage(null); }} className="text-gray-500 hover:text-gray-700">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="mt-3">
+                {viewingStorage.image && <img src={viewingStorage.image} alt={viewingStorage.title} className="w-full rounded-md mb-3 object-contain" />}
+                {viewingStorage.text && <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingStorage.text}</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showInfoPanel && activeConversation && canOpenInfoPanel && (
           <div
             ref={infoPanelShellRef}
             className=" w-80 flex-shrink-0 transition-all duration-300 animate-in slide-in-from-right"
@@ -3232,9 +3712,28 @@ function replaceEmojiShortcodes(text) {
                   }}
                   muteMap={muteMap}
                   onMuteChange={handleMuteChange}
-                  onClearChat={() => {
-                    if (!window.confirm('Xóa toàn bộ lịch sử chat? Hành động không thể hoàn tác.')) return;
+                  onClearChat={async () => {
+                    const ok = await confirmAsync({ title: 'Xóa lịch sử', message: 'Xóa toàn bộ lịch sử chat? Hành động không thể hoàn tác.' });
+                    if (!ok) return;
+                    // ensure pinned messages are also unpinned on the server
+                    try {
+                      if (Array.isArray(pinnedMessages) && socket) {
+                        for (const pm of pinnedMessages) {
+                          if (!pm || !pm._id) continue;
+                          try { socket.emit('pin_message', { messageId: pm._id, conversationId: activeConversation._id, isPinning: false }); } catch (e) {}
+                        }
+                      }
+                    } catch (e) {}
+                    
+                    try {
+                      // Gửi lệnh xóa lên server để không bị hiện lại khi reload
+                      await axios.delete(`${API_URL}/messages/conversation/${activeConversation._id}`);
+                    } catch (error) {
+                      console.error("Lỗi xóa tin nhắn:", error);
+                    }
+
                     setMessages([]);
+                    setPinnedMessages([]);
                     setPinNotifications([]);
                     toast.success('Đã xóa lịch sử chat');
                   }}
@@ -3263,6 +3762,7 @@ function replaceEmojiShortcodes(text) {
         onStartCall={handleStartCallReady}
         onCallEnd={handleCallEnd}
         onCallStateChange={handleCallStateChange}
+        onRejoinReady={(fn) => { rejoinCallRef.current = fn; }}
       />
 
       {forwardMsg && (

@@ -75,6 +75,18 @@ export const setLocalDescription = async (pc, description) => {
 export const setRemoteDescription = async (pc, description) => {
   if (!pc || !description) throw new Error('PeerConnection and description required');
   try {
+    const type = description.type;
+    if (type === 'answer') {
+      if (pc.signalingState !== 'have-local-offer') {
+        console.warn('webrtcHelper.setRemoteDescription: expected have-local-offer for answer, current=', pc.signalingState);
+        throw new Error('pc not have-local-offer');
+      }
+    } else if (type === 'offer') {
+      if (pc.signalingState !== 'stable') {
+        console.warn('webrtcHelper.setRemoteDescription: expected stable for offer, current=', pc.signalingState);
+        throw new Error('pc not stable');
+      }
+    }
     await pc.setRemoteDescription(new RTCSessionDescription(description));
   } catch (err) {
     console.error('Failed to set remote description:', err);

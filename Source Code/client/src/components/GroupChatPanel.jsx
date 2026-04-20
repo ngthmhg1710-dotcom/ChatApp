@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { Search, X, Check, Users, ChevronRight, UserPlus } from 'lucide-react';
@@ -22,8 +22,17 @@ function removeAccents(str) {
   return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g,'d').replace(/Đ/g,'D');
 }
 
-function AppLogo({ size = 24 }) {
-  return <img src={logo} alt="Lumi" width={size} height={size} className="object-contain" style={{ width: size, height: size }} />;
+function AppLogo({ size = 24, className = '' }) {
+  return (
+    <img
+      src={logo}
+      alt="Lumi"
+      width={size}
+      height={size}
+      className={`object-contain ${className}`}
+      style={{ width: size, height: size }}
+    />
+  );
 }
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
@@ -35,7 +44,13 @@ function Avatar({ username = '', size = 'md', avatarUrl, online }) {
     <div className="relative flex-shrink-0">
       {avatarUrl
         ? <img src={getFileUrl(avatarUrl)} alt={username} className={`${sz} rounded-full object-cover`} onError={e => e.target.style.display='none'} />
-        : <div className={`${sz} ${color} rounded-full flex items-center justify-center font-bold text-white select-none`}>{initials}</div>
+        : <div className={`${sz} rounded-full flex items-center justify-center select-none`}>
+            <div className="w-full h-full rounded-full bg-pink-400 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" className="w-4 h-4 text-yellow-300" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zM12 14c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+              </svg>
+            </div>
+          </div>
       }
       {online !== undefined && (
         <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${online ? 'bg-green-500' : 'bg-gray-400'}`} />
@@ -45,7 +60,7 @@ function Avatar({ username = '', size = 'md', avatarUrl, online }) {
 }
 
 // ─── Group Avatar (stack) ─────────────────────────────────────────────────────
-function GroupAvatar({ participants = [], groupAvatar, size = 40 }) {
+function GroupAvatar({ participants = [], groupAvatar, onlineUsers = new Set() }) {
   if (groupAvatar) {
     return (
       <img
@@ -65,7 +80,9 @@ function GroupAvatar({ participants = [], groupAvatar, size = 40 }) {
     );
   }
   if (shown.length === 1) {
-    return <Avatar username={shown[0]?.username || '?'} size="md" avatarUrl={shown[0]?.avatar} />;
+    const p = shown[0];
+    const isOnline = onlineUsers.has(String(p._id || p));
+    return <Avatar username={p?.username || '?'} size="md" avatarUrl={p?.avatar} online={isOnline} />;
   }
   return (
     <div className="relative w-10 h-10 flex-shrink-0">
@@ -154,8 +171,14 @@ function CreateGroupModal({ onClose, onCreated, currentUser }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-96 overflow-hidden flex flex-col max-h-[80vh]">
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onMouseDown={() => { if (step === 1) onClose?.(); }}
+    >
+      <div
+        className="bg-white rounded-3xl shadow-2xl w-96 overflow-hidden flex flex-col max-h-[80vh]"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -291,14 +314,31 @@ function CreateGroupModal({ onClose, onCreated, currentUser }) {
 }
 
 // ─── Main GroupChatPanel ──────────────────────────────────────────────────────
-function GroupChatPanel({ onSelectConversation, activeConversationId, socket, user, unreadCounts }) {
+function GroupChatPanel({ onSelectConversation, activeConversationId, socket, user, unreadCounts, onlineUsers: externalOnlineUsers }) {
   const [tab, setTab]             = useState('groups');
   const [searchQuery, setSearchQuery] = useState('');
   const [groups, setGroups]       = useState([]);
   const [friends, setFriends]     = useState([]); // for suggestions
   const [showCreate, setShowCreate] = useState(false);
+  const [localOnlineUsers, setLocalOnlineUsers] = useState(new Set());
+  const onlineUsers = externalOnlineUsers || localOnlineUsers;
+  const setOnlineUsers = setLocalOnlineUsers;
+
   const [searchMsgLoading, setSearchMsgLoading] = useState(false);
   const [messageHits, setMessageHits] = useState([]);
+
+  const [muteMap, setMuteMap] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('chat_mute_map') || '{}'); } catch { return {}; }
+  });
+
+  useEffect(() => {
+    const onStorage = () => {
+      try { setMuteMap(JSON.parse(localStorage.getItem('chat_mute_map') || '{}')); } catch { }
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('chat-mute-map-updated', onStorage);
+    return () => { window.removeEventListener('storage', onStorage); window.removeEventListener('chat-mute-map-updated', onStorage); };
+  }, []);
 
   const activeConvRef = useRef(activeConversationId);
   const searchTimer   = useRef(null);
@@ -325,6 +365,19 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
           .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
       });
     };
+
+    // ✅ FIX: Thêm listener cho Presence
+    const onOnlineList = (ids) => setOnlineUsers(new Set(ids.map(String)));
+    const onOnline = ({ userId }) => setOnlineUsers((prev) => new Set([...prev, String(userId)]));
+    const onOffline = ({ userId }) => setOnlineUsers((prev) => {
+      const n = new Set(prev);
+      n.delete(String(userId));
+      return n;
+    });
+
+    socket.on('online_users_list', onOnlineList);
+    socket.on('user_online', onOnline);
+    socket.on('user_offline', onOffline);
 
     const onNewMsg = ({ message, conversationId }) => {
       setGroups(prev =>
@@ -384,6 +437,9 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
     socket.on('member_left',        onMemberLeft);
     socket.on('promoted_to_admin',  onPromotedToAdmin);
     return () => {
+      socket.off('online_users_list', onOnlineList);
+      socket.off('user_online', onOnline);
+      socket.off('user_offline', onOffline);
       socket.off('new_message',        onNewMsg);
       socket.off('group_created',      onGroupCreated);
       socket.off('added_to_group',     onAddedToGroup);
@@ -434,8 +490,18 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
   const fetchGroups = async () => {
     try {
       const { data } = await axios.get(`${API_URL}/conversations`);
-      const all = data.data?.conversations || data.data || [];
-      setGroups(all.filter(c => c.isGroup || c.type === 'group' || c.type === 'community'));
+      const list = (data.data?.conversations || data.data || []).filter(c => c.isGroup || c.type === 'group' || c.type === 'community');
+      setGroups(list);
+      
+      // ✅ FIX: Cập nhật online ban đầu cho nhóm
+      const initialOnline = new Set();
+      list.forEach(g => g.participants?.forEach(p => { if (p.isOnline) initialOnline.add(String(p._id || p)); }));
+      setOnlineUsers(prev => new Set([...prev, ...initialOnline]));
+
+      if (socket && list.length) {
+        const uids = list.flatMap(g => (g.participants || []).map(p => p._id || p));
+        socket.emit('get_online_users', [...new Set(uids)]);
+      }
     } catch {}
   };
 
@@ -475,53 +541,61 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
     return sharedGroups.length > 0;
   }).slice(0, 5);
 
-  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+  const totalUnread = useMemo(() => {
+    try {
+      return Object.entries(unreadCounts).reduce((sum, [convId, count]) => {
+        return sum + ((muteMap[convId] ?? false) ? 0 : count);
+      }, 0);
+    } catch {
+      return Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+    }
+  }, [unreadCounts, muteMap]);
 
   return (
-    <div className="h-full w-72 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div className="h-full w-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
 
-      {/* Header */}
-      <div className="px-3 pt-3 pb-2 border-b border-gray-100">
-        <div className="flex items-center gap-2 mb-3">
-          <AppLogo size={24} />
-          <span className="text-sm font-bold text-gray-800">Lumi</span>
-        </div>
+  {/* Header */}
+  <div className="px-3 pt-3 pb-2 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+    <div className="flex items-center gap-2 mb-3">
+      <AppLogo size={24} />
+      <span className="text-sm font-bold text-gray-800 dark:text-white">Lumi - Nhóm</span>
+    </div>
 
-        <div className="flex items-center gap-2 mb-2">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Nội dung tin nhắn hoặc tên nhóm..."
-              className="w-full pl-9 pr-8 py-2 text-sm bg-gray-100 rounded-xl border border-transparent focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="relative group flex-shrink-0">
-            <button onClick={() => setShowCreate(true)}
-              className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-xl hover:bg-gray-100 hover:text-gray-700 transition active:scale-95">
-              <MdOutlineGroupAdd className="w-5 h-5" />
-            </button>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-1.5 py-0.5 text-[11px] text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-50">
-              Tạo nhóm
-            </div>
-          </div>
-        </div>
-
-        {!searchQuery && (
-          <div className="flex gap-1">
-            <Tab label="Nhóm"     active={tab === 'groups'}  badge={totalUnread} onClick={() => setTab('groups')} />
-            <Tab label="Đề xuất"  active={tab === 'suggest'} onClick={() => setTab('suggest')} />
-          </div>
+    <div className="flex items-center gap-2 mb-2">
+      <div className="relative flex-1 min-w-0">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Tìm kiếm"
+          className="w-full pl-9 pr-8 py-2 text-sm bg-gray-100 dark:bg-gray-700 dark:text-white rounded-xl border border-transparent focus:border-blue-400 focus:bg-white dark:focus:bg-gray-600 focus:ring-2 focus:ring-blue-100 outline-none transition"
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+            <X className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
+
+      <div className="relative group flex-shrink-0">
+        <button onClick={() => setShowCreate(true)}
+          className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-gray-400 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200 transition active:scale-95">
+          <MdOutlineGroupAdd className="w-5 h-5" />
+        </button>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-1.5 py-0.5 text-[11px] text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-50">
+          Tạo nhóm
+        </div>
+      </div>
+    </div>
+
+    {!searchQuery && (
+      <div className="flex gap-1">
+        <Tab label="Nhóm" active={tab === 'groups'} badge={totalUnread} onClick={() => setTab('groups')} />
+        <Tab label="Đề xuất" active={tab === 'suggest'} onClick={() => setTab('suggest')} />
+      </div>
+    )}
+  </div>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
@@ -553,7 +627,7 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
                     <button key={g._id} type="button" onClick={() => handleSelect(g)}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition text-left mb-0.5
                         ${isActive ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50'}`}>
-                      <GroupAvatar participants={g.participants || []} groupAvatar={g.avatar} />
+                      <GroupAvatar participants={g.participants || []} groupAvatar={g.avatar} onlineUsers={onlineUsers} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-semibold text-gray-800 truncate">{g.name}</p>
@@ -561,7 +635,7 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
                         </div>
                         <p className="text-xs text-blue-700/90 truncate font-medium">{hit.preview}</p>
                       </div>
-                      {unread > 0 && (
+                      {unread > 0 && !(muteMap[g._id] ?? false) && (
                         <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 flex-shrink-0">
                           {unread > 99 ? '99+' : unread}
                         </span>
@@ -597,7 +671,7 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
                 <button key={g._id} onClick={() => handleSelect(g)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition text-left mb-0.5
                     ${isActive ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50'}`}>
-                  <GroupAvatar participants={g.participants || []} groupAvatar={g.avatar} />
+                  <GroupAvatar participants={g.participants || []} groupAvatar={g.avatar} onlineUsers={onlineUsers} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className={`text-sm truncate ${isActive ? 'font-bold text-blue-700' : unread > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}>
@@ -611,7 +685,7 @@ function GroupChatPanel({ onSelectConversation, activeConversationId, socket, us
                       <p className={`text-xs truncate max-w-[140px] ${unread > 0 ? 'text-gray-800 font-semibold' : 'text-gray-400'}`}>
                         {getLastMessagePreview(g)}
                       </p>
-                      {unread > 0 && (
+                      {unread > 0 && !(muteMap[g._id] ?? false) && (
                         <span className="ml-2 flex-shrink-0 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
                           {unread > 99 ? '99+' : unread}
                         </span>

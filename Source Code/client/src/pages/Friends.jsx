@@ -16,7 +16,11 @@ function Avatar({ username = '', size = 'md', onClick }) {
     <div onClick={onClick}
       className={`${sz} ${color} rounded-full flex items-center justify-center font-bold text-white select-none flex-shrink-0
         ${onClick ? 'cursor-pointer hover:opacity-80 transition ring-2 ring-white hover:ring-blue-200' : ''}`}>
-      {initials}
+      <div className="w-full h-full rounded-full bg-pink-400 flex items-center justify-center">
+        <svg viewBox="0 0 24 24" className="w-5 h-5 text-yellow-300" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zM12 14c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+        </svg>
+      </div>
     </div>
   );
 }

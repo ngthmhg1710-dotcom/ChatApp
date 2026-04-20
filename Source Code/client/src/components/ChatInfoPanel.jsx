@@ -51,35 +51,17 @@ function Avatar({ username = '', size = 'xl', avatarUrl }) {
       onError={(e) => { e.target.style.display = 'none'; }}
     />
   ) : (
-    <div className={`${sz} ${color} rounded-full flex items-center justify-center font-bold text-white select-none flex-shrink-0`}>
-      {initials}
-    </div>
-  );
-}
-
-function ConfirmDialog({ title, message, onConfirm, onCancel, danger = true, confirmLabel = 'Xác nhận' }) {
-  return (
-    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-72 p-5 flex flex-col gap-4">
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto ${danger ? 'bg-red-100' : 'bg-blue-100'}`}>
-          <AlertTriangle className={`w-6 h-6 ${danger ? 'text-red-500' : 'text-blue-500'}`} />
-        </div>
-        <div className="text-center">
-          <p className="font-bold text-gray-800">{title}</p>
-          <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">{message}</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onCancel} className="flex-1 py-2 bg-gray-100 text-gray-600 text-sm font-semibold rounded-xl hover:bg-gray-200 transition">
-            Hủy
-          </button>
-          <button onClick={onConfirm} className={`flex-1 py-2 text-white text-sm font-semibold rounded-xl transition ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
-            {confirmLabel}
-          </button>
-        </div>
+    <div className={`${sz} rounded-full flex items-center justify-center select-none flex-shrink-0`}>
+      <div className="w-full h-full rounded-full bg-pink-400 flex items-center justify-center">
+        <svg viewBox="0 0 24 24" className="w-6 h-6 text-yellow-300" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zM12 14c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+        </svg>
       </div>
     </div>
   );
 }
+
+import ConfirmDialog from './ConfirmDialog';
 
 export default function ChatInfoPanel({
   socket,
@@ -242,8 +224,18 @@ export default function ChatInfoPanel({
 
   const handleToggleMute = () => {
     const newVal = !muteNotif;
+
+    try {
+      const map = JSON.parse(localStorage.getItem('chat_mute_map') || '{}');
+      map[conversation?._id] = newVal;
+      localStorage.setItem('chat_mute_map', JSON.stringify(map));
+      window.dispatchEvent(new CustomEvent('chat-mute-map-updated', { detail: map }));
+    } catch (e) {}
+
+    // notify parent page (Chat.jsx) to update its state if provided
     onMuteChange?.(conversation?._id, newVal);
-    toast(newVal ? '🔕 Đã tắt nhấn mạnh trong danh sách chat. Sidebar vẫn hiện số tin mới.' : '🔔 Đã bật thông báo đầy đủ trong chat');
+
+    toast(newVal ? ' Đã tắt thông báo' : ' Đã bật thông báo');
   };
 
   const handleRemoveFriend = () => {
@@ -426,6 +418,19 @@ export default function ChatInfoPanel({
                   </div>
                 </div>
               )}
+              {shownUser.gender && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Flag className="w-4 h-4 text-gray-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400">Giới tính</p>
+                    <p className="text-sm text-gray-700">
+                      {shownUser.gender === 'male' ? 'Nam' : shownUser.gender === 'female' ? 'Nữ' : 'Khác'}
+                    </p>
+                  </div>
+                </div>
+              )}
               {shownUser.createdAt && (
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -474,14 +479,14 @@ export default function ChatInfoPanel({
                   <Bell className="w-4 h-4 text-gray-500" />
                 )}
                 <span className={`text-sm flex-1 text-left font-medium ${muteNotif ? 'text-orange-600' : 'text-gray-700'}`}>
-                  {muteNotif ? 'Bật thông báo' : 'Tắt thông báo trong khung chat'}
+                  {muteNotif ? 'Bật thông báo' : 'Tắt thông báo'}
                 </span>
                 {muteNotif && (
                   <span className="text-[10px] text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full font-semibold">Đang tắt</span>
                 )}
               </button>
               <p className="text-[10px] text-gray-400 px-1 leading-snug">
-                Sidebar vẫn hiện số tin chưa đọc; chỉ giảm nhấn mạnh trong danh sách chat khi đang tắt.
+                Khi đã tắt, cuộc trò chuyện này sẽ không hiện badge hay số tin mới ở sidebar.
               </p>
 
               <button onClick={onSearchMessages} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition">

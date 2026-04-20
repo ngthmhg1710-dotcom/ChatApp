@@ -50,9 +50,9 @@ input.chat-input-login {
 }
 
 /* Các cấu hình Dark Mode hiện tại của bạn giữ nguyên */
-.dark .bg-gray-100 { background-color: #1f2937 !important; }
-.dark .bg-white     { background-color: #1f2937 !important; }
-.dark .bg-gray-50   { background-color: #111827 !important; }
+.dark .bg-gray-100 { background-color: #12121e !important; }
+.dark .bg-white     { background-color: #1e1d2a !important; }
+.dark .bg-gray-50   { background-color: #12121e  !important; }
 
 .dark .text-gray-800 { color: #f9fafb !important; }
 .dark .text-gray-700 { color: #e5e7eb !important; }
@@ -60,14 +60,30 @@ input.chat-input-login {
 .dark .text-gray-500 { color: #9ca3af !important; }
 .dark .text-gray-400 { color: #6b7280 !important; }
 
-.dark .border-gray-200 { border-color: #374151 !important; }
-.dark .border-gray-100 { border-color: #1f2937 !important; }
+.dark .border-gray-200 { border-color: #2a2b2c!important; }
+.dark .border-gray-100 { border-color: #2a2b2c !important; }
+
+/* Dark mode - icon menu chính */
+.dark .group button:not(.active) svg {
+  color: #9CA3AF !important; /* xám sáng, nhìn rõ trong dark mode */
+  transition: all 0.2s ease !important;
+}
+
+.dark .group button:not(.active):hover svg {
+  color: #FFFFFF !important; /* trắng sáng khi hover */
+  filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.6)) !important;
+}
+.dark .group button[class*="bg-gradient"] svg,
+.dark .group button[class*="from-violet"] svg {
+  color: #FFFFFF !important;
+  filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.9)) !important;
+}
 
 /* Input fields trong Dark Mode (Sidebar/Settings) */
 .dark input:not([type="checkbox"]):not([type="range"]),
 .dark textarea {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
+  background-color: #12121e !important;
+  border-color: #2a2b2c !important;
   color: #f9fafb !important;
 }
 
@@ -79,6 +95,63 @@ input.chat-input-login {
 html {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
+/* ── Fix component Lưu trữ cá nhân (toàn bộ) ─────────────────────────────── */
+.dark .from-blue-50 { --tw-gradient-from: #8b83fc20 !important; }
+.dark .to-indigo-50 { --tw-gradient-to: #524bdb20 !important; }
+.dark .border-blue-100 { border-color: #0e45df80 !important; }
+.dark .bg-blue-100 { background-color: #12121e !important; }
+.dark .text-blue-600 { color: #60a5fa !important; }
+.dark .text-blue-800 { color: #93c5fd !important; }
+.dark .text-blue-500 { color: #60a5facc !important; }
+.dark .bg-blue-600 { background: linear-gradient(to right, #3b82f6, #4f46e5) !important; }
+.dark .bg-blue-600:hover { 
+  background: linear-gradient(to right, #3b82f6, #4f46e5) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.3s ease !important;
+}
+/* ── Fix cho modal Ghi chú / Lưu trữ ──────────────────────────────────────── */
+.dark .border-gray-100 { border-color: #8b83fc20 !important; }
+.dark .hover\:bg-gray-100:hover { background-color: #8b83fc20  !important; }
+.dark .hover\:bg-white:hover { background-color: linear-gradient(to right, #3b82f6, #4f46e5) !important; }
+/* ── Fix cho nút item trong Lưu trữ cá nhân ───────────────────────────────── */
+.dark .bg-blue-50 { background: #8b83fc20 !important;}
+.dark .bg-red-50 { background: #fe3e3e20 !important;}
+.dark .hover\:bg-blue-100:hover { 
+  transform: scale(1.05) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.3s ease !important;
+ }
+.dark .border-blue-200 { 
+  border-color: #1e3a8a80 !important; 
+}
+.dark .border-red-200 { 
+  border-color: #8a1e1e80 !important; 
+}
+/* ── Fix hover cho các bg-*-50 trong dark mode ────────────────────────────── */
+.dark .bg-green-50:hover,
+.dark .bg-red-50:hover,
+.dark .bg-orange-50:hover {
+  background-color: #2a2b2c !important;
+}
+/* ── Fix cho avatar/icon trong Lưu trữ ────────────────────────────────────── */
+.dark .bg-gray-200 { 
+  background: linear-gradient(to right, #3b82f6, #4f46e5) !important;
+}
+.dark .bg-gray-200 svg { color: #ffffff !important; }
+/* ── Fix cho tất cả nút p-2 trong modal Lưu trữ ───────────────────────────── */
+.dark button.p-2.text-gray-500:hover { color: #ffffff !important; }
+.dark button.p-2.text-gray-500:hover { background-color: #2a2b2c !important; }
+.dark button.p-2.text-gray-500:active { color: #ffffff !important; background-color: #8b83fc20 !important; }
+/* ── Fix riêng cho nút thông tin người dùng ───────────────────────────────── */
+
+.dark button.hover\:bg-white.rounded-lg.transition:hover { 
+  background: linear-gradient(to right, #3b82f6, #4f46e5) !important;
+  color: #ffffff !important;
+  transform: scale(1.05) !important;
+
+  transition: all 0.3s ease !important;
+}
 
 .chat-text { font-size: var(--chat-font-size, 15px); }
 .chat-time { font-size: calc(var(--chat-font-size, 15px) - 2px); opacity: 0.7; }
@@ -87,3 +160,42 @@ html {
 .chat-caption { font-size: calc(var(--chat-font-size, 15px) - 2px); }
 .chat-meta { font-size: max(10px, calc(var(--chat-font-size, 15px) - 4px)); }
 .chat-input { font-size: var(--chat-font-size, 15px); }
+
+/* Thuần dark mode - ghi đè background sáng */
+/* Xóa hết màu sáng khi hover trong dark mode */
+.dark .bg-green-50:hover,
+.dark .bg-red-50:hover,
+.dark .bg-orange-50:hover,
+.dark .hover\:bg-green-50:hover,
+.dark .hover\:bg-red-50:hover,
+.dark .hover\:bg-orange-50:hover,
+/* ── Fix hover cho bg-*-50 trong dark mode (CHỈ TRONG LƯU TRỮ) ────────────── */
+.dark .storage-container .bg-green-50:hover,
+.dark .storage-container .bg-red-50:hover,
+.dark .storage-container .bg-orange-50:hover,
+.dark [class*="personal-storage"] .bg-green-50:hover,
+.dark [class*="personal-storage"] .bg-red-50:hover,
+.dark [class*="personal-storage"] .bg-orange-50:hover {
+  background-color: #2a2b2c !important;
+}
+.dark .chat-item:hover {
+  background-color: #2a2b2c !important;
+}
+
+/* Nếu muốn khi hover vẫn có hiệu ứng nhưng là màu tối (không phải xanh/cam/đỏ) */
+.dark .hover\:bg-gray-100:hover {
+  background-color: #2a2b2c !important;
+}
+
+/* Đặc trị cho mấy cái nút trong cài đặt chat */
+.dark .bg-green-50,
+.dark button.bg-green-50,
+.dark div.bg-green-50 {
+  background-color: transparent !important;
+}
+
+.dark .bg-green-50:hover,
+.dark button.bg-green-50:hover,
+.dark div.bg-green-50:hover {
+  background-color: #2a2b2c !important;
+}

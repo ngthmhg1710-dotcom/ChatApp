@@ -20,6 +20,7 @@ export default function Profile() {
       <div className="bg-white p-6 rounded shadow">
         <p><strong>Username:</strong> {user.username}</p>
         <p><strong>Email:</strong> {user.email}</p>
+        <p><strong>Giới tính:</strong> {user.gender === 'male' ? 'Nam' : user.gender === 'female' ? 'Nữ' : 'Khác'}</p>
         <p><strong>Bio:</strong> {user.bio || "No bio"}</p>
         <p>
           <strong>Status:</strong>{" "}

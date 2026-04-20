@@ -35,7 +35,7 @@ services:
     ports:
       - "5000:5000"
     env_file:
-      - ./server/.env          # ← đọc từ file .env, không hardcode
+      - ./server/.env     
     volumes:
       - uploads_data:/app/uploads
     depends_on:

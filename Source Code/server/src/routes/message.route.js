@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { getMessages, uploadFile, searchMessages } from '../controllers/message.controller.js';
+import { getMessages, uploadFile, searchMessages, markMessagesAsRead } from '../controllers/message.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -46,5 +46,6 @@ const upload = multer({
 router.get('/search', protect, searchMessages);
 router.get('/:conversationId', protect, getMessages);
 router.post('/upload', protect, upload.single('file'), uploadFile);
+router.put('/:conversationId/read', protect, markMessagesAsRead);
 
 export default router;

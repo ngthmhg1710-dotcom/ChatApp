@@ -11,13 +11,12 @@ import Profile        from './pages/Profile';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword  from './pages/ResetPassword';
 import AdminReports   from './pages/AdminReports';
-import CallRoom       from './pages/CallRoom';
 import DirectCallRoom from './pages/DirectCallRoom';
 import { useAuthStore } from './store/authStore';
 
 function CallRouteGate() {
-  const [searchParams] = useSearchParams();
-  return searchParams.get('group') === '1' ? <CallRoom /> : <DirectCallRoom />;
+  // Group calls removed: always use DirectCallRoom (1-1)
+  return <DirectCallRoom />;
 }
 
 function App() {

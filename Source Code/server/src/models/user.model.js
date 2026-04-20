@@ -123,6 +123,13 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+userSchema.methods.getVerificationToken = function () {
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  this.verificationToken = verificationToken;
+  this.verificationExpire = Date.now() + 24 * 60 * 60 * 1000;
+  return verificationToken;
+};
+
 userSchema.methods.getResetPasswordToken = function () {
   const resetToken = crypto.randomBytes(20).toString('hex');
 

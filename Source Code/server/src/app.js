@@ -9,6 +9,7 @@ import messageRoutes from './routes/message.route.js';
 import conversationRoutes from './routes/conversation.route.js';
 import friendRoutes from './routes/friend.route.js';
 import reportRoutes from './routes/report.route.js';
+import personalStorageRoutes from './routes/personalStorage.route.js';
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/personal-storage', personalStorageRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
