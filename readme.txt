@@ -1,3 +1,5 @@
+File docker-compose.uml đã có sẵn trong source code.
+
 Cách chạy code:
 Vào Source Code, mở terminal và chạy lệnh:
 
