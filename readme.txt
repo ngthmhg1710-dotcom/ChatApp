@@ -21,4 +21,4 @@ Tài khoản admin (trong bài đã tự động tạo):
 admin
 password123
 
-Link video demo: 
+Link video demo: https://www.youtube.com/watch?v=2cLlJjDw2ME
