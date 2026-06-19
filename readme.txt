@@ -1,24 +1,62 @@
-File docker-compose.uml đã có sẵn trong source code.
+# Chat App
 
-Cách chạy code:
-Vào Source Code, mở terminal và chạy lệnh:
+Ứng dụng chat thời gian thực sử dụng Docker, Node.js và MongoDB.
 
+## Thành viên
+
+* Nguyễn Thị Hương
+* Đặng Hân Hân
+* Phạm Thị Cẩm Giang
+
+## Công nghệ sử dụng
+
+* Node.js
+* MongoDB
+* Docker
+* Docker Compose
+
+## Chạy dự án
+
+Trong thư mục **Source Code**, mở Terminal và chạy:
+
+```bash
 docker-compose up
+```
 
-Sau đó vào:
+Sau khi khởi động thành công, truy cập:
 
+```text
 http://localhost/
+```
 
-sẽ tự động nhảy ra trang đăng nhập.
+## Cơ sở dữ liệu
 
-Để kiểm tra database thì sử dụng MongoDB, tạo mới bằng cách Add New Connection sau đó dán link này vào phần URI:
+Dự án sử dụng MongoDB.
 
+Kết nối bằng MongoDB Compass với URI:
+
+```text
 mongodb://admin:password123@127.0.0.1:27017/chatapp?authSource=admin&directConnection=true
+```
 
-Sau đó nhấn Connect thì sẽ kết nối thành công. Dữ liệu chính sẽ nằm ở mục tên là chatapp. Hai mục chính là mục messages là mục lưu trữ tin nhắn, users là mục tài khoản.
+Dữ liệu chính nằm trong database:
 
-Tài khoản admin (trong bài đã tự động tạo):
-admin
-password123
+```text
+chatapp
+```
 
-Link video demo: https://www.youtube.com/watch?v=2cLlJjDw2ME
+Các collection quan trọng:
+
+* `users` - Thông tin tài khoản
+* `messages` - Dữ liệu tin nhắn
+
+## Tài khoản Admin
+
+```text
+Username: admin
+Password: password123
+```
+
+## Demo
+
+https://www.youtube.com/watch?v=2cLlJjDw2ME
